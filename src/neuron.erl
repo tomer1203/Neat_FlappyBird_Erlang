@@ -10,7 +10,9 @@
 -author("tomer").
 
 %% API
--export([loop/1]).
+-export([init/0,loop/1,test/0]).
+
+% this record describes the current data used by the neuron.
 -record(neuron_data,{
   id,                 % the id of the current neuron
   in_pids,            % the pid of all inputs of the current neuron
@@ -21,8 +23,26 @@
   acc                 % An Accumulator for the neuron
 }).
 
-init()->ok.
+% A test function used to test the functionality of the neuron
+test()->
+  PID = spawn(fun()-> init() end),
+  Initial_State = #neuron_data{id = PID, in_pids = #{1=>0.1,2=>0.2,3=>0.3}, out_pids = [self(),self()], bias = 7,af = log,acc = 0},
+  PID!{configure_neuron,self(),Initial_State},
+  PID!{neuron_send,3,6},
+  PID!{neuron_send,1,7},
+  PID!{neuron_send,2,8}.
 
+% this is the function that should be spawned. when a configuration is received it starts the main loop
+init()->
+  receive
+    {configure_neuron,_From,#neuron_data{id = ID, in_pids = In_pids, out_pids = Out_pids, remaining_in_pids = _Remaining_in_pids, bias = Bias,af = AF,acc = Acc}} ->
+      loop(#neuron_data{id = ID, in_pids = In_pids, out_pids = Out_pids, remaining_in_pids = In_pids, bias = Bias,af = AF,acc = Acc})
+  end.
+
+% responsible for all the neurons calculations,
+% Accumulates the weighted inputs and sends the result when all inputs arrived
+% neurons function =>
+% Result = activation_function(sum_i(Weight_i * Input_i) + bias) = activation_function(W*In + b)
 loop(State = #neuron_data{})->
   receive
     {neuron_send, From, Value}->
@@ -52,83 +72,83 @@ loop(State = #neuron_data{})->
       erlang:error("Invalid Message")
   end.
 
-
+% a long list of possible activation function as suggested
+% from "Handbook of neuroevolution through Erlang by Gene I sher".
 activation_function(none, Value)->Value;
-activation_function(tanh,Value)->   math:tanh(Value);
-activation_function(cos,Value)->    math:cos(Value);
-activation_function(sin,Value)->    math:sin(Value);
+activation_function(tanh,Value)-> math:tanh(Value);
+activation_function(cos,Value)->  math:cos(Value);
+activation_function(sin,Value)->  math:sin(Value);
 activation_function(sign,0)->     0;
 activation_function(sign,Value)->
   case Value > 0 of
     true -> 1;
     false -> -1
   end;
-% The bin/1 function converts Val into a binary value, 1 if Val > 0, and 0 if Val = < 0.
-activation_function(bin,Val)->
-  case Val > 0 of
+% The bin/1 function converts Value into a binary value, 1 if Value > 0, and 0 if Value = < 0.
+activation_function(bin,Value)->
+  case Value > 0 of
     true -> 1;
     false -> 0
   end;
-%The trinary/1 function converts Val into a trinary value.
-activation_function(trinary,Val)->
+%The trinary/1 function converts Value into a trinary value.
+activation_function(trinary,Value)->
   if
-    (Val < 0.33) and (Val > -0.33) -> 0;
-    Val >= 0.33 -> 1;
-    Val =< -0.33 -> -1
+    (Value < 0.33) and (Value > -0.33) -> 0;
+    Value >= 0.33 -> 1;
+    Value =< -0.33 -> -1
   end;
-activation_function(multiquadric,Val)->
-  math:pow(Val*Val + 0.01,0.5);
-activation_function(absolute,Val)->
-  abs(Val);
-activation_function(linear,Val)->
-  Val;
-activation_function(quadratic,Val)->
-  activation_function(sign,Val)*Val*Val;
-activation_function(gaussian,Val)->
-  activation_function(gaussian,2.71828183,Val);
-activation_function(sqrt,Val)->
-  activation_function(sign,Val)*math:sqrt(abs(Val));
-
-activation_function(log,Val)->
-  case Val == 0 of
+activation_function(multiquadric,Value)->
+  math:pow(Value*Value + 0.01,0.5);
+activation_function(absolute,Value)->
+  abs(Value);
+activation_function(linear,Value)->
+  Value;
+activation_function(quadratic, Value = Value)->
+  activation_function(sign,Value)*Value*Value;
+activation_function(gaussian,Value)->
+  activation_function(gaussian,2.71828183,Value);
+activation_function(sqrt,Value)->
+  activation_function(sign,Value)*math:sqrt(abs(Value));
+activation_function(log,Value)->
+  case Value == 0 of
     true -> 0;
-    false -> activation_function(sign,Val)*math:log(abs(Val))
+    false -> activation_function(sign,Value)*math:log(abs(Value))
   end;
-activation_function(sigmoid,Val)->
-  V = case Val > 10 of
+activation_function(sigmoid,Value)->
+  V = case Value > 10 of
         true -> 10;
         false ->
-          case Val < -10 of
+          case Value < -10 of
             true -> -10;
-            false -> Val
+            false -> Value
           end
       end,
   2/(1+math:pow(2.71828183,-V)) - 1;
-activation_function(sigmoid1,Val)->
-  Val/(1+abs(Val));
+activation_function(sigmoid1,Value)->
+  Value/(1+abs(Value));
 
 %The avg/1 function accepts a List for a parameter, and then returns the average of the list to the caller.
 activation_function(avg,List)->
   lists:sum(List)/length(List);
+
+%The std/1 function accepts a List for a parameter, and then returns to the caller the standard deviation of the list.
 activation_function(std,List)->
   Avg = activation_function(avg,(List)),
   activation_function(std,List,Avg,[]).
-
-activation_function(std,[Val|List],Avg,Acc)->
-  activation_function(std,List,Avg,[math:pow(Avg-Val,2)|Acc]);
+activation_function(std,[Value|List],Avg,Acc)->
+  activation_function(std,List,Avg,[math:pow(Avg-Value,2)|Acc]);
 activation_function(std,[],_Avg,Acc)->
   Variance = lists:sum(Acc)/length(Acc),
   math:sqrt(Variance).
 
-activation_function(gaussian,Const,Val)->
-  V = case Val > 10 of
+activation_function(gaussian,Const,Value)->
+  V = case Value > 10 of
         true -> 10;
         false ->
-          case Val < -10 of
+          case Value < -10 of
             true -> -10;
-            false -> Val
+            false -> Value
           end
       end,
   math:pow(Const,-V*V).
 
-%The std/1 function accepts a List for a parameter, and then returns to the caller the standard deviation of the list.
