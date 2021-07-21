@@ -61,7 +61,6 @@ loop(State = #neuron_data{})->
          0->
           % activate the af function on the acc
           Result = activation_function(State#neuron_data.af, Acc+State#neuron_data.bias),
-           io:format("Res = ~p~n",[Result]),
           % send result to all output recipients
           [Out_Pid!{neuron_send, self(), Result}||Out_Pid <- State#neuron_data.out_pids],
           % restart the neuron to starting position
