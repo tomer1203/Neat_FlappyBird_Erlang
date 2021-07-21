@@ -4,9 +4,9 @@
 %%% @doc
 %%%
 %%% @end
-%%% Created : 21. יולי 2021 10:12
+%%% Created : 21.7 2021 10:12
 %%%-------------------------------------------------------------------
--module(construct_Genotype).
+-module(genotype).
 -author("omrag").
 
 %% API
