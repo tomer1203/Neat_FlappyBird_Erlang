@@ -18,13 +18,15 @@
 
 -define(PIPE_GAP,200).
 -define(X_VELOCITY,5).
+-define(BIRD_X_LOCATION,230).
+
 
 -define(BG_WIDTH,288).
--define(BG_HIGHT,512).
+-define(BG_HEIGHT,512).
 -define(BASE_WIDTH,336).
--define(BASE_HIGHT,112).
+-define(BASE_HEIGHT,112).
 -define(PIPE_WIDTH,52).
--define(PIPE_HIGHT,320).
+-define(PIPE_HEIGHT,320).
 -define(BIRD_WIDTH,34).
--define(BIRD_HIGHT,24).
+-define(BIRD_HEIGHT,24).
 -define(BIRD_RADIUS,13).% averaged width and height to 26
