@@ -11,6 +11,8 @@
 
 %% API
 -export([init/0,loop/1,test/0]).
+
+% this record describes the current data used by the neuron.
 -record(neuron_data,{
   id,                 % the id of the current neuron
   in_pids,            % the pid of all inputs of the current neuron
@@ -20,6 +22,8 @@
   af,                 % the activation function used in this neuron
   acc                 % An Accumulator for the neuron
 }).
+
+% A test function used to test the functionality of the neuron
 test()->
   PID = spawn(fun()-> init() end),
   Initial_State = #neuron_data{id = PID, in_pids = #{1=>0.1,2=>0.2,3=>0.3}, out_pids = [self(),self()], bias = 7,af = log,acc = 0},
@@ -27,13 +31,18 @@ test()->
   PID!{neuron_send,3,6},
   PID!{neuron_send,1,7},
   PID!{neuron_send,2,8}.
+
+% this is the function that should be spawned. when a configuration is received it starts the main loop
 init()->
   receive
     {configure_neuron,_From,#neuron_data{id = ID, in_pids = In_pids, out_pids = Out_pids, remaining_in_pids = _Remaining_in_pids, bias = Bias,af = AF,acc = Acc}} ->
-      io:format("Hello world"),
       loop(#neuron_data{id = ID, in_pids = In_pids, out_pids = Out_pids, remaining_in_pids = In_pids, bias = Bias,af = AF,acc = Acc})
   end.
 
+% responsible for all the neurons calculations,
+% Accumulates the weighted inputs and sends the result when all inputs arrived
+% neurons function =>
+% Result = activation_function(sum_i(Weight_i * Input_i) + bias) = activation_function(W*In + b)
 loop(State = #neuron_data{})->
   receive
     {neuron_send, From, Value}->
@@ -64,7 +73,8 @@ loop(State = #neuron_data{})->
       erlang:error("Invalid Message")
   end.
 
-
+% a long list of possible activation function as suggested
+% from "Handbook of neuroevolution through Erlang by Gene I sher".
 activation_function(none, Value)->Value;
 activation_function(tanh,Value)-> math:tanh(Value);
 activation_function(cos,Value)->  math:cos(Value);
