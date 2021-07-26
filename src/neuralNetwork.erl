@@ -12,7 +12,6 @@
 -behaviour(gen_statem).
 
 %% API
-
 -export([start_link/0,idle/3,construct_network/2]).
 
 %% gen_statem callbacks
@@ -111,7 +110,6 @@ code_change(_OldVsn, StateName, State = #nn_state{}, _Extra) ->
 %%%===================================================================
 
 % construct the neural network(genotype->phenotype), send to Network message:finished_constructing, then beaver like neuron.
-
 construct_network(G,NnPID)->
   [Actuator]=genotype:get_actuator(G),
   SelfPID=self(),
@@ -141,6 +139,7 @@ construct_node(N,IdToPIDs)->
                            NewIdToPIDs=maps:put(N#neuron.id,NewPID,IdToPIDs),NewIdToPIDs.
 
 
+
 configure_nn(G,IdToPIDs)-> ListOfNodes=digraph:vertices(G),configure_nn(G,IdToPIDs,ListOfNodes).
 configure_nn(_,_,[])->ok;
 configure_nn(G,IdToPIDs,[H|T])-> if
@@ -160,7 +159,6 @@ configure_nn(G,IdToPIDs,[H|T])-> if
                                         HeadPid ! {configure_neuron,self(),Neuron},configure_nn(G,IdToPIDs,T)
                                       end.
 
-
 %the function get Graph, Node and maps of PIDs, key:ID. return list of all node neighbours PIDs.
 get_out_PIDs(G,N,PIDs)->NeighboursOut=digraph:out_neighbours(G,N),get_out_PIDs(G,PIDs,NeighboursOut,[]).
 get_out_PIDs(_,_,[],OutPIDs)->OutPIDs;
@@ -172,3 +170,12 @@ get_sensor_PIDs(_,_,[],SensorsPIDs)->SensorsPIDs;
 get_sensor_PIDs(G,PIDs,[H|T],SensorsPIDs) ->
   PID=maps:get(H#neuron.id,PIDs),
   get_sensor_PIDs(G,PIDs,T,SensorsPIDs++[PID]).
+
+%return map of all the in edges {from,to} weight, key: from id, value: weight.
+get_weights_map(G,Node,IdToPIDs) -> Edges=digraph:in_edges(G,Node),Weights=#{} ,get_weights_map(G,IdToPIDs,Edges,Weights).
+get_weights_map(_,_,[],WeightsMap) -> WeightsMap;
+get_weights_map(G,IdToPIDs,[H|T],WeightsMap) ->
+  {_,Node1,_,Weight}= digraph:edge(G,H),case Weight =:= [] of
+                                          true->io:format("egde is: ~p~n,Weight: ~p~n",[digraph:edge(G,H),Weight]),erlang:error("invalid Weight");
+                                          false->ok
+                                        end,PID=maps:get(Node1#neuron.id,IdToPIDs),WeightsMap_new= maps:put(PID,Weight,WeightsMap),get_weights_map(G,IdToPIDs,T,WeightsMap_new).
