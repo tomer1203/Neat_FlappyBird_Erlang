@@ -23,16 +23,7 @@
 %                             |       |
 %                             |       |
 %<----------- x ----------->  |       |
--record(pipe_rec,{height,x,passed}).
 
--record(bird_rec,{y,vel,angle,jump_height}).
--record(bird_graphics_rec,{y,angle}).
-
--record(sim_state,{tick_time,
-                   bird,              % the bird running in the current simulation
-                   visible_pipeList,  % the pipes which are visible on screen
-                   extra_pipeList,    % pipes in reserve for when the visible pipes move out of the screen
-                   used_pipeList}).   % the already used pipes, we keep those pipes so that we can refresh the reserve from the used pipes when we run out
 test()->
 
   {Collide1,Sim1} = simulate_a_frame(#sim_state{
