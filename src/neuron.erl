@@ -11,17 +11,8 @@
 
 %% API
 -export([init/0,loop/1,test/0]).
+-include("Constants.hrl").
 
-% this record describes the current data used by the neuron.
--record(neuron_data,{
-  id,                 % the id of the current neuron
-  in_pids,            % the pid of all inputs of the current neuron
-  out_pids,           % the pid of all outputs of the current neuron
-  remaining_in_pids,  % the pids which have not yet sent an input to the neuron
-  bias,               % the bias of the neuron calculation
-  af,                 % the activation function used in this neuron
-  acc                 % An Accumulator for the neuron
-}).
 
 % A test function used to test the functionality of the neuron
 test()->

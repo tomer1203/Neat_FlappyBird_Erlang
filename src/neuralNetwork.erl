@@ -10,9 +10,10 @@
 -author("Omri & Tomer").
 
 -behaviour(gen_statem).
+-include("Constants.hrl").
 
 %% API
--export([start_link/0,idle/3,construct_network/2]).
+-export([start_link/0,idle/3,simulation/3]).
 
 %% gen_statem callbacks
 -export([init/1, format_status/2, state_name/3, handle_event/4, terminate/3,
@@ -20,17 +21,6 @@
 
 -define(SERVER, ?MODULE).
 
--record(nn_state, {pcPID,genotype,pipList,actuatorPID,sensorsPIDs,simulation}).
--record(neuron, {type,id=erlang:unique_integer(),layer,af=tanh,bias=rand:uniform()}).
--record(neuron_data,{
-  id,                 % the id of the current neuron
-  in_pids,            % the pid of all inputs of the current neuron
-  out_pids,           % the pid of all outputs of the current neuron
-  remaining_in_pids,  % the pids which have not yet sent an input to the neuron
-  bias,               % the bias of the neuron calculation
-  af,                 % the activation function used in this neuron
-  acc=0                % An Accumulator for the neuron
-}).
 %%%===================================================================
 %%% API
 %%%===================================================================
@@ -76,20 +66,52 @@ state_name(_EventType, _EventContent, State = #nn_state{}) ->
   {next_state, NextStateName, State}.
 
 idle(cast,{start_simulation,Pc_PID,Genotype,Pipe_list},State) when Pc_PID =:=State#nn_state.pcPID ->
-  NextStateName = construction,
   %TODO- mutator.
+  if
+    State#nn_state.require_mutation =:= true -> genotype:mutator(Genotype,?NUMBER_OF_MUTATION);
+    true                                     -> ok
+  end,
   Actuator_PID=spawn(fun()->construct_network(Genotype,self())end),
   %TODO- send to pc the new genotype.
   New_stat=State#nn_state{pipList = Pipe_list,genotype = Genotype,actuatorPID=Actuator_PID},
+  {keep_state, New_stat};
+
+idle(cast,{finished_constructing, ActuatorPid, SensorsPIDs},State) when ActuatorPid =:= State#nn_state.actuatorPID ->
+  NextStateName = simulation,
+  New_stat =State#nn_state{sensorsPIDs = SensorsPIDs},
   {next_state, NextStateName, New_stat}.
 
 
-construction(cast,{finished_constructing,_,SensorsPIDs},State)  ->
-  NextStateName = simulation,New_stat =State#nn_state{sensorsPIDs = SensorsPIDs},
-  {next_state, NextStateName, New_stat}.
+simulation(cast,{start_simulation,Pc_PID},State) when Pc_PID =:= State#nn_state.pcPID ->
+  % initiate simulation
+  Simulation = simulation:initiate_simulation(State#nn_state.pipList),
+  NewState = State#nn_state{simulation = Simulation},
+  Features = simulation:feature_extraction(Simulation),
+  % send to sensors
+  send_to_sensors(Features, State#nn_state.sensorsPIDs),
+  {keep_state,NewState};
 
+simulation(cast,{neuron_send, ActuatorPid, Value},State) when ActuatorPid =:= State#nn_state.actuatorPID ->
+  % translate output to binary
+  Jump = if
+    Value>0.5 -> true;
+    true      -> false
+  end,
 
-simulation(cast,{start_simulation,Pc_PID},State) when Pc_PID =:= State#nn_state.pcPID -> ok .
+  % simulate a frame
+  {Collide,_Bird_graphics,New_simulation_state} = simulation:simulate_a_frame(State#nn_state.simulation,Jump),
+  NewState = State#nn_state{simulation = New_simulation_state},
+  % if survived
+  case Collide of
+    false ->
+      Features = simulation:feature_extraction(New_simulation_state),
+      send_to_sensors(Features, State#nn_state.sensorsPIDs),
+      {keep_state,}
+    true->
+
+  end.
+  % else
+    % move to evaluate state
 
 
 
@@ -122,7 +144,9 @@ code_change(_OldVsn, StateName, State = #nn_state{}, _Extra) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
-
+send_to_sensors(Features, SensorsPIDs)->
+  Zipped_sensor_inputs = lists:zip(Features, SensorsPIDs),
+  [Sensor!{neuron_send, self(), Value}||{Value,Sensor}<-Zipped_sensor_inputs].
 % construct the neural network(genotype->phenotype), send to Network message:finished_constructing, then beaver like neuron.
 construct_network(G,NnPID)->
   [Actuator]=genotype:get_actuator(G),

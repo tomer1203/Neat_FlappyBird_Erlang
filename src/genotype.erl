@@ -9,16 +9,12 @@
 -module(genotype).
 -author("omrag").
 
+-include("Constants.hrl").
+
 %% API
 -export([construct_Genotype/3,get_sensors/1,get_actuator/1,get_layer/2,test_Genotype/2,
   get_layer/1,rand_neutron/1,get_nodes/1,mutator/2]).
 
--record(neuron,
- {type,
-  id=erlang:unique_integer(),
-  layer,
-  af=tanh,
-  bias=rand:uniform()}).
 %for test only
 test_Genotype(NumOfLayers,NumOfNeurons) ->
   ListOfSensors=[#neuron{type = sensor,layer = 0,id=sensor_1},#neuron{type = sensor,layer = 0,id=sensor_2},#neuron{type = sensor,layer = 0,id=sensor_3}],
@@ -174,19 +170,15 @@ probability_choice_sq(N) -> Ens = rand:uniform(100), P=100/math:pow(N,1/2),if
                                                 end.
 % chosen between -Pi/2 and Pi/2
 probability_choice_half() ->Ens = rand:uniform(100), if
-                                                      Ens =< 50 -> math:pi() ;
-                                                      true -> - math:pi()
+                                                      Ens =< 50 -> math:pi()/2;
+                                                      true -> - math:pi()/2
                                                     end.
 
-rand_af()->ListOfAf=
-  [gaussian, tanh, cos, sin, sign, bin, trinary, multiquadric, absolute, linear, quadratic, gaussian, sqrt, log, sigmoid, avg, std, gaussian],
-  LengthAf=length(ListOfAf),
+rand_af()->
+  ListOfAf = ?ACTIVATION_FUNCTION_LIST,
+  LengthAf = length(ListOfAf),
   Index = rand:uniform(LengthAf),
   SelectedAf= lists:nth(Index ,ListOfAf),SelectedAf.
-
-
-
-
 
 %%Choose a random neuron A, check if it has a bias in its weights list, if it does
 %%not, add the bias value. If the neuron already has a bias value, do nothing.
@@ -211,8 +203,6 @@ mutate_weights(G,[H|T]) ->
     Pro =:= true -> mod_edge_weight(G,H,probability_choice_half()),mutate_weights(G,T);
     true -> mutate_weights(G,T)
   end.
-
-  
 
 
 %TODO- 3. reset_weights(G)

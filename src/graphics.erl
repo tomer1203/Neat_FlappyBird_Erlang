@@ -53,7 +53,7 @@ init([]) ->
 
     % Generate random pipes
     Pipe = generate_pipes(1),
-    Extras = generate_pipes(20),
+    Extras = generate_pipes(3),
     SimState = #sim_state{
         tick_time = 1,
         bird = #bird_rec{
@@ -88,6 +88,7 @@ handle_info(timer, State=#graphics_state{frame = Frame,simulation = Simulation,b
     % MoveBase
     NewBase = #base_state{x1 = move_base(Base_location_rec#base_state.x1) , x2 = move_base(Base_location_rec#base_state.x2)},
     NewState =State#graphics_state{simulation = NewSimulationState2,collide = Collide2,time = Time+1,base_state = NewBase},
+    %io:format("Frame Count= ~p~n", [Time]),
     {noreply, NewState}.
 
 

@@ -43,6 +43,9 @@
 -define(BIRD_HEIGHT,48).%24
 -define(BIRD_RADIUS,13).% averaged width and height to 26
 
+% Genotype Constants %
+-define(ACTIVATION_FUNCTION_LIST,[gaussian, tanh, cos, sin, sign, bin, trinary, multiquadric, absolute, linear, quadratic, gaussian, sqrt, log, sigmoid, avg, std, gaussian]).
+-define(NUMBER_OF_MUTATION, 3).
 
 %% GRAPHICS RECORDS %%
 -record(graphics_state, {
@@ -53,6 +56,7 @@
   x1 = 0,
   x2 = ?BASE_WIDTH
 }).
+
 
 %% SIMULATION RECORDS %%
 -record(pipe_rec,{height,x,passed}).
@@ -78,3 +82,25 @@
   extra_pipeList,    % pipes in reserve for when the visible pipes move out of the screen
   used_pipeList}).   % the already used pipes, we keep those pipes so that we can refresh the reserve from the used pipes when we run out
 
+
+%% NEURAL NETWORK RECORDS %%
+-record(nn_state, {
+  pcPID,
+  genotype,
+  pipList,
+  actuatorPID,
+  sensorsPIDs,
+  simulation,
+  graphics_ets = none,
+  require_mutation
+}).
+-record(neuron, {type,id=erlang:unique_integer(),layer,af=tanh,bias=rand:uniform()}).
+-record(neuron_data,{
+  id,                 % the id of the current neuron
+  in_pids,            % the pid of all inputs of the current neuron
+  out_pids,           % the pid of all outputs of the current neuron
+  remaining_in_pids,  % the pids which have not yet sent an input to the neuron
+  bias,               % the bias of the neuron calculation
+  af,                 % the activation function used in this neuron
+  acc=0                % An Accumulator for the neuron
+}).
