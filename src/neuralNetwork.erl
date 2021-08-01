@@ -20,7 +20,7 @@
 
 -define(SERVER, ?MODULE).
 
--record(nn_state, {pcPID,genotype,pipList,actuatorPID,simulation}).
+-record(nn_state, {pcPID,genotype,pipList,actuatorPID,sensorsPIDs,simulation}).
 -record(neuron, {type,id=erlang:unique_integer(),layer,af=tanh,bias=rand:uniform()}).
 -record(neuron_data,{
   id,                 % the id of the current neuron
@@ -75,11 +75,25 @@ state_name(_EventType, _EventContent, State = #nn_state{}) ->
   NextStateName = next_state,
   {next_state, NextStateName, State}.
 
-idle(cast,{start_simulation,Pc_PID,Genotype,Pipe_list},State)  when Pc_PID =:=State#nn_state.pcPID ->
-  NextStateName = construction,Actuator_PID=spawn(fun()->construct_network(Genotype,self())end),
+idle(cast,{start_simulation,Pc_PID,Genotype,Pipe_list},State) when Pc_PID =:=State#nn_state.pcPID ->
+  NextStateName = construction,
+  %TODO- mutator.
+  Actuator_PID=spawn(fun()->construct_network(Genotype,self())end),
+  %TODO- send to pc the new genotype.
   New_stat=State#nn_state{pipList = Pipe_list,genotype = Genotype,actuatorPID=Actuator_PID},
   {next_state, NextStateName, New_stat}.
 
+
+construction(cast,{finished_constructing,_,SensorsPIDs},State)  ->
+  NextStateName = simulation,New_stat =State#nn_state{sensorsPIDs = SensorsPIDs},
+  {next_state, NextStateName, New_stat}.
+
+
+simulation(cast,{start_simulation,Pc_PID},State) when Pc_PID =:= State#nn_state.pcPID -> ok .
+
+
+
+%TODO - evaluation state
 %create_network(cast,{},State)->
 
 
@@ -123,7 +137,7 @@ construct_network(G,NnPID)->
   NnPID ! {finished_constructing,SelfPID,SensorsPIDs},
   neuron:loop(NeuronActuator).
 
-
+%TODO: number of layer is int ? or not?
 % construct all the layer frm the actuator until the sensor return map of ID -> PID.
 construct_all_layers(_,-1,IdToPIDs)->IdToPIDs;
 construct_all_layers(G,NumOfLayer,IdToPIDs)->
@@ -140,7 +154,7 @@ construct_node(N,IdToPIDs)->
 
 
 
-configure_nn(G,IdToPIDs)-> ListOfNodes=digraph:vertices(G),configure_nn(G,IdToPIDs,ListOfNodes).
+configure_nn(G,IdToPIDs)-> ListOfNodes=genotype:get_nodes(G),configure_nn(G,IdToPIDs,ListOfNodes).
 configure_nn(_,_,[])->ok;
 configure_nn(G,IdToPIDs,[H|T])-> if
                                       H#neuron.type=:=sensor ->
@@ -160,22 +174,22 @@ configure_nn(G,IdToPIDs,[H|T])-> if
                                       end.
 
 %the function get Graph, Node and maps of PIDs, key:ID. return list of all node neighbours PIDs.
-get_out_PIDs(G,N,PIDs)->NeighboursOut=digraph:out_neighbours(G,N),get_out_PIDs(G,PIDs,NeighboursOut,[]).
+get_out_PIDs(G,N,PIDs)->NeighboursOut=digraph:out_neighbours(G,N#neuron.id),get_out_PIDs(G,PIDs,NeighboursOut,[]).
 get_out_PIDs(_,_,[],OutPIDs)->OutPIDs;
-get_out_PIDs(G,PIDs,[H|T],OutPIDs)->get_out_PIDs(G,PIDs,T,OutPIDs ++[maps:get(H#neuron.id,PIDs)]).
+get_out_PIDs(G,PIDs,[H|T],OutPIDs)->get_out_PIDs(G,PIDs,T,OutPIDs ++[maps:get(H,PIDs)]).
 
 %return list of sensor PIDS.
-get_sensor_PIDs(G,PIDs) -> Sensor=genotype:get_sensors(G),get_sensor_PIDs(G,PIDs,Sensor,[]).
+get_sensor_PIDs(G,IdToPIDs) -> Sensor=genotype:get_sensors(G),get_sensor_PIDs(G,IdToPIDs,Sensor,[]).
 get_sensor_PIDs(_,_,[],SensorsPIDs)->SensorsPIDs;
-get_sensor_PIDs(G,PIDs,[H|T],SensorsPIDs) ->
-  PID=maps:get(H#neuron.id,PIDs),
-  get_sensor_PIDs(G,PIDs,T,SensorsPIDs++[PID]).
+get_sensor_PIDs(G,IdToPIDs,[H|T],SensorsPIDs) ->
+  PID=maps:get(H#neuron.id,IdToPIDs),
+  get_sensor_PIDs(G,IdToPIDs,T,SensorsPIDs++[PID]).
 
 %return map of all the in edges {from,to} weight, key: from id, value: weight.
-get_weights_map(G,Node,IdToPIDs) -> Edges=digraph:in_edges(G,Node),Weights=#{} ,get_weights_map(G,IdToPIDs,Edges,Weights).
+get_weights_map(G,Node,IdToPIDs) -> Edges=digraph:in_edges(G,Node#neuron.id),Weights=#{} ,get_weights_map(G,IdToPIDs,Edges,Weights).
 get_weights_map(_,_,[],WeightsMap) -> WeightsMap;
 get_weights_map(G,IdToPIDs,[H|T],WeightsMap) ->
-  {_,Node1,_,Weight}= digraph:edge(G,H),case Weight =:= [] of
+  {_,Node1ID,_,Weight}= digraph:edge(G,H),case Weight =:= [] of
                                           true->io:format("egde is: ~p~n,Weight: ~p~n",[digraph:edge(G,H),Weight]),erlang:error("invalid Weight");
                                           false->ok
-                                        end,PID=maps:get(Node1#neuron.id,IdToPIDs),WeightsMap_new= maps:put(PID,Weight,WeightsMap),get_weights_map(G,IdToPIDs,T,WeightsMap_new).
+                                        end,PID=maps:get(Node1ID,IdToPIDs),WeightsMap_new= maps:put(PID,Weight,WeightsMap),get_weights_map(G,IdToPIDs,T,WeightsMap_new).
