@@ -73,17 +73,15 @@ simulate_a_frame(Simulation_State = #sim_state{},Jump)->
   Moved_pipes = pipe_move(Simulation_State#sim_state.visible_pipeList),
 
   [First_Pipe|Rest] = Moved_pipes,
-  io:format("Test= ~p~n",[((not First_Pipe#pipe_rec.passed) and (First_Pipe#pipe_rec.x < ?BIRD_X_LOCATION))]),
 
   % if we passed the first pipe
   {VIS,RES,USE} = if
     ((not First_Pipe#pipe_rec.passed) and (First_Pipe#pipe_rec.x < ?BIRD_X_LOCATION))->
       All_pipes = [First_Pipe#pipe_rec{passed = true}|Rest],
-      io:format("All_pipes= ~p~n",[All_pipes]),
       %% ADD PIPE %%
       % if reserve List is empty
       {Resrve_List,Used_list} = if
-        length(Simulation_State#sim_state.extra_pipeList) =:= 0 ->io:format("This might be the bug?~n"),
+        length(Simulation_State#sim_state.extra_pipeList) =:= 0 ->
           {lists:reverse(Simulation_State#sim_state.used_pipeList),[]};
         true                                                    ->
           {Simulation_State#sim_state.extra_pipeList,Simulation_State#sim_state.used_pipeList}
@@ -93,14 +91,12 @@ simulate_a_frame(Simulation_State = #sim_state{},Jump)->
       Vis_Pipe_List = lists:append([All_pipes,[First_Reserve#pipe_rec{x=?WIN_WIDTH,passed = false}]]),
       {Vis_Pipe_List,Rest_Reserve,Used_list};
     true->
-      io:format("moved pipes= ~p~n",[Moved_pipes]),
       {Moved_pipes,Simulation_State#sim_state.extra_pipeList,Simulation_State#sim_state.used_pipeList}
   end,
-  io:format("VIS= ~p~n",[VIS]),
 
   % if there is a pipe off-screen remove it
   {New_visible_pipeList,New_Used_pipes} = case First_Pipe#pipe_rec.x+?PIPE_WIDTH < 0 of
-    true->  [A|B] = VIS,io:format("used pipes: ~p~n",[[A|USE]]),{B,[A|USE]};
+    true->  [A|B] = VIS,{B,[A|USE]};
     false-> {VIS,USE}
   end,
   % check collision
@@ -110,7 +106,7 @@ simulate_a_frame(Simulation_State = #sim_state{},Jump)->
     true                      -> pipe_collision_detection(Moved_bird,New_visible_pipeList)
   end,
   % return if collided and new sim state
- {Collide,#sim_state{tick_time = Tick_time, bird = Moved_bird, visible_pipeList = New_visible_pipeList, extra_pipeList = RES, used_pipeList = New_Used_pipes}}.
+ {Collide,#bird_graphics_rec{},#sim_state{tick_time = Tick_time, bird = Moved_bird, visible_pipeList = New_visible_pipeList, extra_pipeList = RES, used_pipeList = New_Used_pipes}}.
 
 bird_move(Bird,Jump,Tick_time)->
   {Vel,Jump_height} = case Jump of
@@ -123,7 +119,6 @@ bird_move(Bird,Jump,Tick_time)->
     Displacement < 0  -> Displacement - 2;
     true              -> Displacement
   end,
-  io:format("~p~n",[Displacement2]),
   Y = Bird#bird_rec.y + Displacement2,
   Tilt = Bird#bird_rec.angle,
   Tilt2 = if
@@ -140,9 +135,7 @@ bird_move(Bird,Jump,Tick_time)->
   end,
   #bird_rec{y = Y,vel = Vel,angle = Tilt2,jump_height = Jump_height}.
 pipe_move(Pipes)->
-  io:format("move pipes length = ~p~n",[length(Pipes)]),
-  F = [#pipe_rec{height = Height,x = X-?X_VELOCITY,passed = Passed}||#pipe_rec{height=Height,x=X,passed = Passed}<-Pipes],
-io:format("move pipes length = ~p~n",[length(F)]),F.
+  F = [#pipe_rec{height = Height,x = X-?X_VELOCITY,passed = Passed}||#pipe_rec{height=Height,x=X,passed = Passed}<-Pipes], F.
 
 
 % pipe.x < bird.x + birdRadius and bird.x - birdRadius < pipe.x + pipeWidth and
