@@ -10,7 +10,7 @@
 -author("tomer").
 
 %% API
--export([simulate_a_frame/2,test/0]).
+-export([simulate_a_frame/2,test/0,simulate_a_frame2/2]).
 -include("Constants.hrl").
 %  <- y==0                    |       |
 %                             |       |
@@ -61,9 +61,10 @@ test()->
   io:format("~n~n-----7------~p~n",[{Collide7,Sim7}]),
   {Collide8,Sim8} = simulate_a_frame(Sim7,false),
   io:format("~n~n-----8------~p~n",[{Collide8,Sim8}]).
+simulate_a_frame2(Simulation_state = #sim_state{},Jump)->{Jump,Simulation_state}.
 simulate_a_frame(Simulation_State = #sim_state{},Jump)->
   Tick_time = if
-    Jump =:=1 -> 1;
+    Jump =:= true -> 1;
     true      -> Simulation_State#sim_state.tick_time+1
   end,
   % move bird
@@ -82,7 +83,7 @@ simulate_a_frame(Simulation_State = #sim_state{},Jump)->
       %% ADD PIPE %%
       % if reserve List is empty
       {Resrve_List,Used_list} = if
-        length(Simulation_State#sim_state.extra_pipeList) =:= 0 ->
+        length(Simulation_State#sim_state.extra_pipeList) =:= 0 ->io:format("This might be the bug?~n"),
           {lists:reverse(Simulation_State#sim_state.used_pipeList),[]};
         true                                                    ->
           {Simulation_State#sim_state.extra_pipeList,Simulation_State#sim_state.used_pipeList}
@@ -90,7 +91,7 @@ simulate_a_frame(Simulation_State = #sim_state{},Jump)->
       [First_Reserve|Rest_Reserve] = Resrve_List,
       %  add the new pipe from the reserve list
       Vis_Pipe_List = lists:append([All_pipes,[First_Reserve#pipe_rec{x=?WIN_WIDTH,passed = false}]]),
-      {Vis_Pipe_List,Rest_Reserve,[Used_list]};
+      {Vis_Pipe_List,Rest_Reserve,Used_list};
     true->
       io:format("moved pipes= ~p~n",[Moved_pipes]),
       {Moved_pipes,Simulation_State#sim_state.extra_pipeList,Simulation_State#sim_state.used_pipeList}
@@ -126,7 +127,7 @@ bird_move(Bird,Jump,Tick_time)->
   Y = Bird#bird_rec.y + Displacement2,
   Tilt = Bird#bird_rec.angle,
   Tilt2 = if
-    (Displacement2 < 0) or (Y < (Jump_height + 50))->
+    (Displacement2 < 0) -> %or (Y < (Jump_height + 50))
       T = if
         Tilt < ?MAX_ROTATION-> ?MAX_ROTATION;
         true-> Tilt
@@ -160,7 +161,7 @@ pipe_collision_detection(Bird,Pipes)->
   end.
 
 world_collision_detection(Bird)->
-  case ((Bird#bird_rec.y > (?BG_HEIGHT - ?BASE_HEIGHT)) or (Bird#bird_rec.y < 0)) of
+  case ((Bird#bird_rec.y+2*?BIRD_RADIUS > (?BG_HEIGHT - ?BASE_HEIGHT)) or (Bird#bird_rec.y < 0)) of
     true->true;
     false-> false
   end.

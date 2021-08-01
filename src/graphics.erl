@@ -17,12 +17,12 @@
 -compile(export_all).
 -define(max_x, 1344).
 -define(max_y,890).
--define(Timer,500).%67
+-define(Timer,67).%67
 
 -define(SERVER, ?MODULE).
 
 -record(state, {frame, panel, dc, paint, list,
-    simulation,
+    simulation,collide = false,time = 0,
     bmpRMap,bmpB1Map,bmpB2Map,bmpB3Map,bmpB4Map,bmpPipeMap,bmpBaseMap}).
 %%%-------------------------------------------------------------------
 start2() ->
@@ -108,6 +108,7 @@ init([]) ->
         extra_pipeList = Extras,
         used_pipeList = []},
 
+
     {Frame,#state{frame = Frame, panel = Panel, dc=DC, paint = Paint,simulation = SimState, bmpRMap = BmpRmap,bmpB1Map = BmpB1Map,bmpB2Map = BmpB2Map,bmpB3Map = BmpB3Map,bmpPipeMap = BmpPipeMap,bmpBaseMap = BmpBaseMap}}.
 
 %%%-------------------------------------------------------------------
@@ -123,12 +124,24 @@ handle_event(hello_world,State = #state {frame = Frame}) -> % close window event
     wxWindow:destroy(Frame),
     wx:destroy(),
     {stop,normal,State}.
+draw_bird(PaintPanel,BmpBird1Map,BmpBird2Map,BmpBird3Map,X,Y,Tilt,Time)->
+
+    BirdBmp = case round(Time/?ANIMATION_TIME) rem 3 of
+       0->BmpBird1Map;
+       1->BmpBird2Map;
+       2->BmpBird3Map
+    end,
+    BirdIm = wxBitmap:convertToImage(BirdBmp),
+    RotBirdIm = wxImage:rotate(BirdIm,angle2radians(Tilt), {0,0}),% if direction is not left, rotate the image
+    RotBmpBird = wxBitmap:new(RotBirdIm),
+    wxDC:drawBitmap(PaintPanel, RotBmpBird, {X,Y}).
 draw_pipe(PaintPanel,BmpPipeMap,X, Height)->
     PipeIm = wxBitmap:convertToImage(BmpPipeMap),
-    RotPipeIm = wxImage:rotate(PipeIm,180*math:pi()*2/360, {0,0}),% if direction is not left, rotate the image
+    RotPipeIm = wxImage:rotate(PipeIm,angle2radians(180), {0,0}),% if direction is not left, rotate the image
     RotBmpPipeMap = wxBitmap:new(RotPipeIm),
     wxDC:drawBitmap(PaintPanel, RotBmpPipeMap, {X, Height-?PIPE_HEIGHT}),
     wxDC:drawBitmap(PaintPanel, BmpPipeMap, {X, Height+?PIPE_GAP}).
+angle2radians(Angle)->Angle*math:pi()*2/360.
 %%handle_event(#wx{event = #wxMouse{type=left_down, x=X, y=Y}},State) -> % when left click has been pressed, activate navigation function
 %%    spawn(main,main_navigation,[X,Y,get(?PC1),get(?PC2),get(?PC3),get(?PC4)]), % spawn the process in the corresponding PC
 %%    {noreply,State};
@@ -143,21 +156,36 @@ draw_pipe(PaintPanel,BmpPipeMap,X, Height)->
 %%    end,
 %%    {noreply,State}.
 
-handle_info(timer, State=#state{frame = Frame,simulation = Simulation}) ->  % refresh screen for graphics
+handle_info(timer, State=#state{frame = Frame,simulation = Simulation,time = Time}) ->  % refresh screen for graphics
     wxWindow:refresh(Frame), % refresh screen
     erlang:send_after(?Timer,self(),timer),
-    %Newstate = State#state{simulation = State#state.simulation#sim_state{bird = State#state.simulation#sim_state.bird#bird_rec{y=State#state.simulation#sim_state.bird#bird_rec.y-1}}},
-    {_,NewSimulationState} = simulation:simulate_a_frame(Simulation,false),
-    NewState =State#state{simulation = NewSimulationState},
+    %NewState = State#state{simulation = State#state.simulation#sim_state{bird = State#state.simulation#sim_state.bird#bird_rec{y=State#state.simulation#sim_state.bird#bird_rec.y-1}}},
+    {Collide, NewSimulationState2} = case Simulation#sim_state.tick_time =:= 13 of
+        true ->  {Collide,NewSimulationState} = simulation:simulate_a_frame(Simulation,true);
+        false->  {Collide,NewSimulationState} = simulation:simulate_a_frame(Simulation,false)
+    end,
+
+    %{_,NewSimulationState} = simulation:simulate_a_frame2(Simulation,false),
+    io:format("NewSimulationState: ~p~n",[NewSimulationState]),
+
+    NewState =State#state{simulation = NewSimulationState2,collide = Collide,time = Time+1},
     {noreply, NewState}.
 
-handle_sync_event(#wx{event=#wxPaint{}}, _,  _State = #state{panel = Panel,simulation = SimState, bmpRMap = BmpRmap,bmpB1Map = BmpB1Map,bmpB2Map = BmpB2Map,bmpB3Map = BmpB3Map,bmpPipeMap = BmpPipeMap,bmpBaseMap = BmpBaseMap}) ->
+handle_sync_event(#wx{event=#wxPaint{}}, _,  _State = #state{panel = Panel,simulation = SimState,collide = Collide,time = Time, bmpRMap = BmpRmap,bmpB1Map = BmpB1Map,bmpB2Map = BmpB2Map,bmpB3Map = BmpB3Map,bmpPipeMap = BmpPipeMap,bmpBaseMap = BmpBaseMap}) ->
     DC2=wxPaintDC:new(Panel),
     wxDC:clear(DC2),
     io:format("It's a me ~p~n",[SimState#sim_state.visible_pipeList]),
     wxDC:drawBitmap(DC2,BmpRmap,{0,0}),
-    wxDC:drawBitmap(DC2,BmpB1Map,{?BIRD_X_LOCATION,SimState#sim_state.bird#bird_rec.y}),
+    wxDC:drawBitmap(DC2,BmpBaseMap,{0,?BG_HEIGHT - ?BASE_HEIGHT}),
+    %wxDC:drawBitmap(DC2,BmpB1Map,{?BIRD_X_LOCATION,round(SimState#sim_state.bird#bird_rec.y)}),
+    draw_bird(DC2,BmpB1Map,BmpB2Map,BmpB3Map,?BIRD_X_LOCATION,round(SimState#sim_state.bird#bird_rec.y),SimState#sim_state.bird#bird_rec.angle,Time),
     [draw_pipe(DC2,BmpPipeMap,Pipe#pipe_rec.x,Pipe#pipe_rec.height)||Pipe <- SimState#sim_state.visible_pipeList],
+
+    % TODO: debug: shows a bird on the top right part of the screen every time that a collision happens
+    if
+        Collide =:= true ->wxDC:drawBitmap(DC2,BmpB1Map,{0,20});
+        true-> ok
+    end,
     {noreply, _State};
 
 handle_sync_event(_Event,_,State) ->

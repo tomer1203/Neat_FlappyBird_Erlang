@@ -25,8 +25,8 @@
 -define(FLOOR,730).
 
 -define(MAX_ROTATION,25).
--define(ROT_VEL,20).
--define(ANIMATION_TIME,5).
+-define(ROT_VEL,10).
+-define(ANIMATION_TIME,2).
 
 -define(PIPE_GAP,200).
 -define(X_VELOCITY,5).
@@ -36,8 +36,8 @@
 
 -define(BG_WIDTH,564).%288
 -define(BG_HEIGHT,1024).%512
--define(BASE_WIDTH,336).
--define(BASE_HEIGHT,112).
+-define(BASE_WIDTH,672).%336
+-define(BASE_HEIGHT,224).%112
 -define(PIPE_WIDTH,104).%52
 -define(PIPE_HEIGHT,640).%320
 -define(BIRD_WIDTH,68).%34
