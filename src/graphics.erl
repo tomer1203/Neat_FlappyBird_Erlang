@@ -15,9 +15,7 @@
 -include("Constants.hrl").
 -export([start/0]).
 -export([init/1,handle_event/2,handle_sync_event/3,handle_info/2]).
--define(max_x, 1344).
--define(max_y,890).
--define(Timer,67).%67
+
 
 -define(SERVER, ?MODULE).
 
@@ -29,8 +27,6 @@ start() ->
 
 
 init([]) ->
-
-
     % graphics
     WxServer = wx:new(),
     Frame = wxFrame:new(WxServer, ?wxID_ANY, "FLappy Bird", [{size,{?BG_WIDTH, ?BG_HEIGHT}}]),
@@ -68,15 +64,11 @@ init([]) ->
         visible_pipeList = Pipe,
         extra_pipeList = Extras,
         used_pipeList = []},
+    NewBase = #base_state{x1 = 0,x2 = ?BASE_WIDTH},
 
-
-    {Frame,#graphics_state{frame = Frame, panel = Panel, dc=DC, paint = Paint,simulation = SimState, bmpRMap = BmpRmap,bmpB1Map = BmpB1Map,bmpB2Map = BmpB2Map,bmpB3Map = BmpB3Map,bmpPipeMap = BmpPipeMap,bmpBaseMap = BmpBaseMap}}.
+    {Frame,#graphics_state{frame = Frame, panel = Panel, dc=DC, paint = Paint,simulation = SimState,base_state = NewBase, bmpRMap = BmpRmap,bmpB1Map = BmpB1Map,bmpB2Map = BmpB2Map,bmpB3Map = BmpB3Map,bmpPipeMap = BmpPipeMap,bmpBaseMap = BmpBaseMap}}.
 
 %%%-------------------------------------------------------------------
-generate_pipes(N)->generate_pipes(N,[]).
-generate_pipes(0,Acc)->Acc;
-generate_pipes(N,Acc)->Height = rand:uniform(?PIPE_MAX_HEIGHT-?PIPE_MIN_DISTANCE_FROM_EDGES)+?PIPE_MIN_DISTANCE_FROM_EDGES,
-    generate_pipes(N-1,[#pipe_rec{height = Height,x = 0,passed = false}|Acc]).
 
 handle_event(#wx{event = #wxClose{}},State = #graphics_state {frame = Frame}) -> % close window event
     io:format("Exiting\n"),
@@ -84,36 +76,34 @@ handle_event(#wx{event = #wxClose{}},State = #graphics_state {frame = Frame}) ->
     wx:destroy(),
     {stop,normal,State}.
 
-
-
 % This Is the main Loop for the graphics
-handle_info(timer, State=#graphics_state{frame = Frame,simulation = Simulation,time = Time}) ->  % refresh screen for graphics
+handle_info(timer, State=#graphics_state{frame = Frame,simulation = Simulation,base_state = Base_location_rec,time = Time}) ->  % refresh screen for graphics
     wxWindow:refresh(Frame), % refresh screen
     erlang:send_after(?Timer,self(),timer),
-    {Collide2,_, NewSimulationState2} = case Simulation#sim_state.tick_time =:= 13 of
+
+    {Collide2,_, NewSimulationState2} = case Simulation#sim_state.tick_time =:= 9 of
         true ->  {Collide,Graphics_Bird,NewSimulationState} = simulation:simulate_a_frame(Simulation,true),{Collide,Graphics_Bird,NewSimulationState};
         false->  {Collide,Graphics_Bird,NewSimulationState} = simulation:simulate_a_frame(Simulation,false),{Collide,Graphics_Bird,NewSimulationState}
     end,
-
-
-    NewState =State#graphics_state{simulation = NewSimulationState2,collide = Collide2,time = Time+1},
+    % MoveBase
+    NewBase = #base_state{x1 = move_base(Base_location_rec#base_state.x1) , x2 = move_base(Base_location_rec#base_state.x2)},
+    NewState =State#graphics_state{simulation = NewSimulationState2,collide = Collide2,time = Time+1,base_state = NewBase},
     {noreply, NewState}.
 
-handle_sync_event(#wx{event=#wxPaint{}}, _,  _State = #graphics_state{panel = Panel,simulation = SimState,collide = Collide,time = Time, bmpRMap = BmpRmap,bmpB1Map = BmpB1Map,bmpB2Map = BmpB2Map,bmpB3Map = BmpB3Map,bmpPipeMap = BmpPipeMap,bmpBaseMap = BmpBaseMap}) ->
+
+handle_sync_event(#wx{event=#wxPaint{}}, _,  _State = #graphics_state{panel = Panel,simulation = SimState,base_state = Base_rec,collide = Collide,time = Time, bmpRMap = BmpRmap,bmpB1Map = BmpB1Map,bmpB2Map = BmpB2Map,bmpB3Map = BmpB3Map,bmpPipeMap = BmpPipeMap,bmpBaseMap = BmpBaseMap}) ->
     DC2=wxPaintDC:new(Panel),
     wxDC:clear(DC2),
-    io:format("It's a me ~p~n",[SimState#sim_state.visible_pipeList]),
     wxDC:drawBitmap(DC2,BmpRmap,{0,0}),
-    wxDC:drawBitmap(DC2,BmpBaseMap,{0,?BG_HEIGHT - ?BASE_HEIGHT}),
+
     draw_bird(DC2,BmpB1Map,BmpB2Map,BmpB3Map,?BIRD_X_LOCATION,round(SimState#sim_state.bird#bird_rec.y),SimState#sim_state.bird#bird_rec.angle,Time),
     [draw_pipe(DC2,BmpPipeMap,Pipe#pipe_rec.x,Pipe#pipe_rec.height)||Pipe <- SimState#sim_state.visible_pipeList],
-
+    draw_base(DC2, BmpBaseMap, Base_rec#base_state.x1, Base_rec#base_state.x2),
     % TODO: debug: shows a bird on the top right part of the screen every time that a collision happens
     if
         Collide =:= true ->wxDC:drawBitmap(DC2,BmpB1Map,{0,20});
         true-> ok
-    end,
-    {noreply, _State};
+    end;
 
 handle_sync_event(_Event,_,State) ->
     {noreply, State}.
@@ -134,7 +124,9 @@ draw_pipe(PaintPanel,BmpPipeMap,X, Height)->
     RotBmpPipeMap = wxBitmap:new(RotPipeIm),
     wxDC:drawBitmap(PaintPanel, RotBmpPipeMap, {X, Height-?PIPE_HEIGHT}),
     wxDC:drawBitmap(PaintPanel, BmpPipeMap, {X, Height+?PIPE_GAP}).
-
+draw_base(PaintPanel, BmpBaseMap, X1, X2)->
+    wxDC:drawBitmap(PaintPanel,BmpBaseMap,{X1,?BG_HEIGHT - ?BASE_HEIGHT}),
+    wxDC:drawBitmap(PaintPanel,BmpBaseMap,{X2,?BG_HEIGHT - ?BASE_HEIGHT}).
 
 createBitMaps() ->         % create bitmap to all images
     Rmap = wxImage:new("../Images/bg.png"),
@@ -170,3 +162,11 @@ createBitMaps() ->         % create bitmap to all images
     {BmpRMap,BmpB1Map,BmpB2Map,BmpB3Map,BmpPipeMap,BmpBaseMap}.
 
 angle2radians(Angle)->Angle*math:pi()*2/360.
+
+move_base(X) when X + ?BASE_WIDTH - ?X_VELOCITY < 0 ->?BASE_WIDTH-8;
+move_base(X)->X - ?X_VELOCITY.
+
+generate_pipes(N)->generate_pipes(N,[]).
+generate_pipes(0,Acc)->Acc;
+generate_pipes(N,Acc)->Height = rand:uniform(?PIPE_MAX_HEIGHT-?PIPE_MIN_DISTANCE_FROM_EDGES)+?PIPE_MIN_DISTANCE_FROM_EDGES,
+    generate_pipes(N-1,[#pipe_rec{height = Height,x = 0,passed = false}|Acc]).

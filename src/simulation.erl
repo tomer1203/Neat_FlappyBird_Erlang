@@ -10,7 +10,7 @@
 -author("tomer").
 
 %% API
--export([simulate_a_frame/2,test/0,simulate_a_frame2/2]).
+-export([simulate_a_frame/2,test/0]).
 -include("Constants.hrl").
 %  <- y==0                    |       |
 %                             |       |
@@ -61,7 +61,6 @@ test()->
   io:format("~n~n-----7------~p~n",[{Collide7,Sim7}]),
   {Collide8,Sim8} = simulate_a_frame(Sim7,false),
   io:format("~n~n-----8------~p~n",[{Collide8,Sim8}]).
-simulate_a_frame2(Simulation_state = #sim_state{},Jump)->{Jump,Simulation_state}.
 simulate_a_frame(Simulation_State = #sim_state{},Jump)->
   Tick_time = if
     Jump =:= true -> 1;
@@ -113,7 +112,7 @@ bird_move(Bird,Jump,Tick_time)->
     true->  {-10.5,Bird#bird_rec.y};
     false-> {Bird#bird_rec.vel,Bird#bird_rec.jump_height}
   end,
-  Displacement = Vel*Tick_time+0.5*(3)*math:pow(Tick_time,2),
+  Displacement = Vel*Tick_time+0.5*(?GRAVITY)*math:pow(Tick_time,2),
   Displacement2 = if
     Displacement >=16 -> 16;
     Displacement < 0  -> Displacement - 2;
@@ -140,7 +139,7 @@ pipe_move(Pipes)->
 
 % pipe.x < bird.x + birdRadius and bird.x - birdRadius < pipe.x + pipeWidth and
 % pipe.height > bird.y + birdRadius or bird.y - birdRadius > pipe.height + pipeGap
-pipe_collision_detection(Bird,[])->exit("no pipes visible");
+pipe_collision_detection(_Bird,[])->exit("no pipes visible");
 pipe_collision_detection(Bird,Pipes)->
   [P|_R] = Pipes,
   Pipe_x = P#pipe_rec.x,
