@@ -15,7 +15,7 @@
 -include("Constants.hrl").
 -export([start/0]).
 -export([init/1,handle_event/2,handle_sync_event/3,handle_info/2]).
-
+-export([generate_pipes/1]).
 
 -define(SERVER, ?MODULE).
 
@@ -52,7 +52,7 @@ init([]) ->
 
     % Generate random pipes
     Pipe = generate_pipes(1),
-    Extras = generate_pipes(3),
+    Extras = generate_pipes(20),
     SimState = #sim_state{
         tick_time = 1,
         bird = #bird_rec{
@@ -78,19 +78,46 @@ handle_event(#wx{event = #wxClose{}},State = #graphics_state {frame = Frame}) ->
 % This Is the main Loop for the graphics
 handle_info(timer, State=#graphics_state{frame = Frame,simulation = Simulation,base_state = Base_location_rec,time = Time}) ->  % refresh screen for graphics
     wxWindow:refresh(Frame), % refresh screen
-    erlang:send_after(?Timer,self(),timer),
+
+
     %io:format("timer event~n"),
-    {Collide2,_, NewSimulationState2} = case Simulation#sim_state.tick_time =:= 9 of
-        true ->  {Collide,Graphics_Bird,NewSimulationState} = simulation:simulate_a_frame(Simulation,true),{Collide,Graphics_Bird,NewSimulationState};
-        false->  {Collide,Graphics_Bird,NewSimulationState} = simulation:simulate_a_frame(Simulation,false),{Collide,Graphics_Bird,NewSimulationState}
+%%    {Collide2,_, NewSimulationState2} = case Simulation#sim_state.tick_time =:= 9 of
+%%        true ->  {Collide,Graphics_Bird,NewSimulationState} = simulation:simulate_a_frame(Simulation,true),{Collide,Graphics_Bird,NewSimulationState};
+%%        false->  {Collide,Graphics_Bird,NewSimulationState} = simulation:simulate_a_frame(Simulation,false),{Collide,Graphics_Bird,NewSimulationState}
+%%    end,
+    {Collide2,NewSimulationState2} = receive
+        {bird_update,_From,{Collide,New_simulation_state}}->io:format("ok going~n"),{Collide,New_simulation_state}
     end,
+    io:format("test1~n"),
+    erlang:send_after(?Timer,self(),timer),
     % MoveBase
     NewBase = #base_state{x1 = move_base(Base_location_rec#base_state.x1) , x2 = move_base(Base_location_rec#base_state.x2)},
     NewState =State#graphics_state{simulation = NewSimulationState2,collide = Collide2,time = Time+1,base_state = NewBase},
     %io:format("Frame Count= ~p~n", [Time]),
     %{noreply, State#graphics_state{simulation = Simulation,collide = true,time = Time+1,base_state = Base_location_rec}}.
+    io:format("test2~n"),
     {noreply, NewState}.
+handle_info(timer, State=#graphics_state{frame = Frame,simulation = Simulation,base_state = Base_location_rec,time = Time}) ->  % refresh screen for graphics
+    wxWindow:refresh(Frame), % refresh screen
 
+
+    %io:format("timer event~n"),
+%%    {Collide2,_, NewSimulationState2} = case Simulation#sim_state.tick_time =:= 9 of
+%%        true ->  {Collide,Graphics_Bird,NewSimulationState} = simulation:simulate_a_frame(Simulation,true),{Collide,Graphics_Bird,NewSimulationState};
+%%        false->  {Collide,Graphics_Bird,NewSimulationState} = simulation:simulate_a_frame(Simulation,false),{Collide,Graphics_Bird,NewSimulationState}
+%%    end,
+    {Collide2,NewSimulationState2} = receive
+                                         {bird_update,_From,{Collide,New_simulation_state}}->io:format("ok going~n"),{Collide,New_simulation_state}
+                                     end,
+    io:format("test1~n"),
+    erlang:send_after(?Timer,self(),timer),
+    % MoveBase
+    NewBase = #base_state{x1 = move_base(Base_location_rec#base_state.x1) , x2 = move_base(Base_location_rec#base_state.x2)},
+    NewState =State#graphics_state{simulation = NewSimulationState2,collide = Collide2,time = Time+1,base_state = NewBase},
+    %io:format("Frame Count= ~p~n", [Time]),
+    %{noreply, State#graphics_state{simulation = Simulation,collide = true,time = Time+1,base_state = Base_location_rec}}.
+    io:format("test2~n"),
+    {noreply, NewState}.
 
 handle_sync_event(#wx{event=#wxPaint{}}, _,  _State = #graphics_state{panel = Panel,simulation = SimState,base_state = Base_rec,collide = Collide,time = Time, bmpRMap = BmpRmap,bmpB1Map = BmpB1Map,bmpB2Map = BmpB2Map,bmpB3Map = BmpB3Map,bmpPipeMap = BmpPipeMap,bmpBaseMap = BmpBaseMap}) ->
 %%    ok;

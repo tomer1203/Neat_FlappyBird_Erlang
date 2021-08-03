@@ -17,7 +17,7 @@
 
 %for test only
 test_Genotype(NumOfLayers,NumOfNeurons) ->
-  ListOfSensors=[#neuron{type = sensor,layer = 0,id=sensor_1},#neuron{type = sensor,layer = 0,id=sensor_2},#neuron{type = sensor,layer = 0,id=sensor_3}],
+  ListOfSensors=[#neuron{type = sensor,layer = 0,id=sensor_1},#neuron{type = sensor,layer = 0,id=sensor_2},#neuron{type = sensor,layer = 0,id=sensor_3},#neuron{type = sensor,layer = 0,id=sensor_4}],
   Genotype=construct_Genotype(ListOfSensors,NumOfLayers,NumOfNeurons),Genotype.
 
 %construct graph with X layers and etch two neighbours layer are connect between them.

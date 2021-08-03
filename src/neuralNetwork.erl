@@ -13,12 +13,12 @@
 -include("Constants.hrl").
 
 %% API
--export([start_link/0,idle/3,simulation/3, evaluation/3]).
+-export([start_link/0,start/2,idle/3,simulation/3, evaluation/3]).
 
 %% gen_statem callbacks
 -export([init/1, format_status/2, state_name/3, handle_event/4, terminate/3,
   code_change/4, callback_mode/0]).
-
+-export([message/0]).
 -define(SERVER, ?MODULE).
 
 %%%===================================================================
@@ -30,6 +30,10 @@
 %% function does not return until Module:init/1 has returned.
 start_link() ->
   gen_statem:start_link({local, ?SERVER}, ?MODULE, [], []).
+start(Name,{PC_PID}) ->
+  gen_statem:start({local,Name}, ?MODULE, {PC_PID}, []).
+message()->
+  gen_statem:cast(?MODULE,{selection,tea}).
 
 %%%===================================================================
 %%% gen_statem callbacks
@@ -39,14 +43,14 @@ start_link() ->
 %% @doc Whenever a gen_statem is started using gen_statem:start/[3,4] or
 %% gen_statem:start_link/[3,4], this function is called by the new
 %% process to initialize.
-init({PC_PID}) ->
+init({PC_PID}) ->PC_PID!"reached the init",
   {ok, idle, #nn_state{pcPID = PC_PID}}.
 
 %% @private
 %% @doc This function is called by a gen_statem when it needs to find out
 %% the callback mode of the callback module.
 callback_mode() ->
-  handle_event_function.
+  state_functions.
 
 %% @private
 %% @doc Called (1) whenever sys:get_status/1,2 is called by gen_statem or
@@ -64,29 +68,39 @@ format_status(_Opt, [_PDict, _StateName, _State]) ->
 state_name(_EventType, _EventContent, State = #nn_state{}) ->
   NextStateName = next_state,
   {next_state, NextStateName, State}.
+idle(cast,{selection,tea},State)->
+  State#nn_state.pcPID!"reached the selection",
+  {keep_state,State};
 
 idle(cast,{start_simulation,Pc_PID,Genotype,Pipe_list},State) when Pc_PID =:=State#nn_state.pcPID ->
   %TODO- mutator.
+  State#nn_state.pcPID!"reached idle",
+
   if
     State#nn_state.require_mutation =:= true -> genotype:mutator(Genotype,?NUMBER_OF_MUTATION);
     true                                     -> ok
   end,
-  Actuator_PID=spawn(fun()->construct_network(Genotype,self())end),
+  io:format("hello world!~n"),
+  Pc_PID!"bob got message",
+
+
+  Me = self(),
+  Actuator_PID=spawn(fun()->construct_network(Genotype,Me)end),
   %TODO- send to pc the new genotype.
   New_stat=State#nn_state{pipList = Pipe_list,genotype = Genotype,actuatorPID=Actuator_PID},
   {keep_state, New_stat};
 
-idle(cast,{finished_constructing, ActuatorPid, SensorsPIDs},State) when ActuatorPid =:= State#nn_state.actuatorPID ->
+idle(info,{finished_constructing, ActuatorPid, SensorsPIDs},State) when ActuatorPid =:= State#nn_state.actuatorPID ->
   % initiate simulation
   Simulation = simulation:initiate_simulation(State#nn_state.pipList),
-
+  State#nn_state.pcPID!"finished construction",
   Features = simulation:feature_extraction(Simulation),
   send_to_sensors(Features, SensorsPIDs),
   NewState = State#nn_state{simulation = Simulation,sensorsPIDs = SensorsPIDs},
   {next_state, simulation, NewState}.
 
 
-simulation(cast,{neuron_send, ActuatorPid, Value},State) when ActuatorPid =:= State#nn_state.actuatorPID ->
+simulation(info,{neuron_send, ActuatorPid, Value},State) when ActuatorPid =:= State#nn_state.actuatorPID ->
   % translate output to binary
   Jump = if
     Value>0.5 -> true;
@@ -96,7 +110,7 @@ simulation(cast,{neuron_send, ActuatorPid, Value},State) when ActuatorPid =:= St
   % simulate a frame
   {Collide,Bird_graphics,New_simulation_state} = simulation:simulate_a_frame(State#nn_state.simulation,Jump),
   NewState = State#nn_state{simulation = New_simulation_state},
-  graphics!{bird_update,self(),{Collide,Bird_graphics}},
+  graphics!{bird_update,self(),{Collide,New_simulation_state}},
   case Collide of
     false -> % if survived
       Features = simulation:feature_extraction(New_simulation_state),
@@ -104,7 +118,6 @@ simulation(cast,{neuron_send, ActuatorPid, Value},State) when ActuatorPid =:= St
       {keep_state,NewState};
     true-> % if died
       {next_state,evaluation,NewState}
-
   end.
 
 

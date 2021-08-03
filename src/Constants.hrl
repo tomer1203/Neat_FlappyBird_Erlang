@@ -15,7 +15,7 @@
 -define(WIN_WIDTH,600).
 -define(WIN_HEIGHT,800).
 -define(FLOOR,730).
--define(Timer,30).% Graphics Update Timer, default: 67
+-define(Timer,67).% Graphics Update Timer, default: 67
 
 % Bird Constants %
 -define(BIRD_X_LOCATION,230).
@@ -41,7 +41,7 @@
 -define(PIPE_HEIGHT,640).%320
 -define(BIRD_WIDTH,68).%34
 -define(BIRD_HEIGHT,48).%24
--define(BIRD_RADIUS,13).% averaged width and height to 26
+-define(BIRD_RADIUS,26).% averaged width and height to 26
 
 % Genotype Constants %
 -define(ACTIVATION_FUNCTION_LIST,[gaussian, tanh, cos, sin, sign, bin, trinary, multiquadric, absolute, linear, quadratic, gaussian, sqrt, log, sigmoid, avg, std, gaussian]).

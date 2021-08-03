@@ -201,8 +201,8 @@ pipe_collision_detection(Bird,Pipes)->
   Bird_x = ?BIRD_X_LOCATION,
   Bird_y = Bird#bird_rec.y,
   if
-    ((Pipe_x < Bird_x + ?BIRD_RADIUS) and (Bird_x - ?BIRD_RADIUS < Pipe_x + ?PIPE_WIDTH)) and
-    ((Pipe_height > Bird_y + ?BIRD_RADIUS) or (Bird_y - ?BIRD_RADIUS > Pipe_height + ?PIPE_GAP))  -> true;
+    ((Pipe_x < Bird_x + ?BIRD_WIDTH) and (Bird_x < Pipe_x + ?PIPE_WIDTH)) and
+    ((Pipe_height > Bird_y) or (Bird_y + ?BIRD_HEIGHT > Pipe_height + ?PIPE_GAP))  -> true;
     true                                                                                          -> false
   end.
 

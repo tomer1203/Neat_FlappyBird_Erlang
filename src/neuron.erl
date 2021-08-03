@@ -59,8 +59,8 @@ loop(State = #neuron_data{})->
         _ ->
           loop(State#neuron_data{acc = Acc,remaining_in_pids = Reduced_in_pids})
       end;
-    _ ->
-      erlang:error("Invalid Message")
+    M ->
+      erlang:error(lists:flatten(io_lib:format("Invalid Message: ~p", [M])))
   end.
 
 % a long list of possible activation function as suggested
