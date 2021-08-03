@@ -77,19 +77,14 @@ idle(cast,{start_simulation,Pc_PID,Genotype,Pipe_list},State) when Pc_PID =:=Sta
   {keep_state, New_stat};
 
 idle(cast,{finished_constructing, ActuatorPid, SensorsPIDs},State) when ActuatorPid =:= State#nn_state.actuatorPID ->
-  NextStateName = simulation,
-  New_stat =State#nn_state{sensorsPIDs = SensorsPIDs},
-  {next_state, NextStateName, New_stat}.
-
-
-simulation(cast,{start_simulation,Pc_PID},State) when Pc_PID =:= State#nn_state.pcPID ->
   % initiate simulation
   Simulation = simulation:initiate_simulation(State#nn_state.pipList),
-  NewState = State#nn_state{simulation = Simulation},
+
   Features = simulation:feature_extraction(Simulation),
-  % send to sensors
-  send_to_sensors(Features, State#nn_state.sensorsPIDs),
-  {keep_state,NewState};
+  send_to_sensors(Features, SensorsPIDs),
+  NewState = State#nn_state{simulation = Simulation,sensorsPIDs = SensorsPIDs},
+  {next_state, simulation, NewState}.
+
 
 simulation(cast,{neuron_send, ActuatorPid, Value},State) when ActuatorPid =:= State#nn_state.actuatorPID ->
   % translate output to binary
@@ -99,19 +94,19 @@ simulation(cast,{neuron_send, ActuatorPid, Value},State) when ActuatorPid =:= St
   end,
 
   % simulate a frame
-  {Collide,_Bird_graphics,New_simulation_state} = simulation:simulate_a_frame(State#nn_state.simulation,Jump),
+  {Collide,Bird_graphics,New_simulation_state} = simulation:simulate_a_frame(State#nn_state.simulation,Jump),
   NewState = State#nn_state{simulation = New_simulation_state},
-  % if survived
+  graphics!{bird_update,self(),{Collide,Bird_graphics}},
   case Collide of
-    false ->
+    false -> % if survived
       Features = simulation:feature_extraction(New_simulation_state),
       send_to_sensors(Features, State#nn_state.sensorsPIDs),
-      {keep_state,}
-    true->
+      {keep_state,NewState};
+    true-> % if died
+      {next_state,evaluation,NewState}
 
   end.
-  % else
-    % move to evaluate state
+
 
 
 evaluation(cast,{kill,PcPID},State) when PcPID =:= State#nn_state.pcPID ->

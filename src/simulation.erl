@@ -80,6 +80,38 @@ feature_extraction(Simulation_State = #sim_state{})->
   Distance_to_pipe = First_pipe#pipe_rec.x - ?BIRD_X_LOCATION,
   PipeHeight       = First_pipe#pipe_rec.height,
   [Bird_Y, Bird_Y_vel, Distance_to_pipe, PipeHeight].
+simulate_pipes(Pipe_State = #pipes_graphics_rec{})->
+  % move pipes
+  Moved_pipes = pipe_move(Pipe_State#pipes_graphics_rec.visible_pipeList),
+
+  [First_Pipe|Rest] = Moved_pipes,
+
+  % if we passed the first pipe
+  {VIS,RES,USE} = if
+                    ((not First_Pipe#pipe_rec.passed) and (First_Pipe#pipe_rec.x < ?BIRD_X_LOCATION))->
+                      All_pipes = [First_Pipe#pipe_rec{passed = true}|Rest],
+                      %% ADD PIPE %%
+                      % if reserve List is empty
+                      {Resrve_List,Used_list} = if
+                                                  length(Pipe_State#pipes_graphics_rec.extra_pipeList) =:= 0 ->
+                                                    {lists:reverse(Pipe_State#pipes_graphics_rec.used_pipeList),[]};
+                                                  true                                                    ->
+                                                    {Pipe_State#pipes_graphics_rec.extra_pipeList,Pipe_State#pipes_graphics_rec.used_pipeList}
+                                                end,
+                      [First_Reserve|Rest_Reserve] = Resrve_List,
+                      %  add the new pipe from the reserve list
+                      Vis_Pipe_List = lists:append([All_pipes,[First_Reserve#pipe_rec{x=?WIN_WIDTH,passed = false}]]),
+                      {Vis_Pipe_List,Rest_Reserve,Used_list};
+                    true->
+                      {Moved_pipes,Pipe_State#pipes_graphics_rec.extra_pipeList,Pipe_State#pipes_graphics_rec.used_pipeList}
+                  end,
+
+  % if there is a pipe off-screen remove it
+  {New_visible_pipeList,New_Used_pipes} = case First_Pipe#pipe_rec.x+?PIPE_WIDTH < 0 of
+                                            true->  [A|B] = VIS,{B,[A|USE]};
+                                            false-> {VIS,USE}
+                                          end,
+  #pipes_graphics_rec{visible_pipeList = New_visible_pipeList, extra_pipeList = RES, used_pipeList = New_Used_pipes}.
 
 simulate_a_frame(Simulation_State = #sim_state{},Jump)->
   Tick_time = if

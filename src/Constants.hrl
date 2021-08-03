@@ -15,7 +15,7 @@
 -define(WIN_WIDTH,600).
 -define(WIN_HEIGHT,800).
 -define(FLOOR,730).
--define(Timer,67).% Graphics Update Timer, default: 67
+-define(Timer,30).% Graphics Update Timer, default: 67
 
 % Bird Constants %
 -define(BIRD_X_LOCATION,230).
@@ -74,7 +74,11 @@
   y,     % Y coordinate of the bird
   angle  % Angle of the bird
 }).
-
+-record(pipes_graphics_rec,{
+  visible_pipeList,  % the pipes which are visible on screen
+  extra_pipeList,    % pipes in reserve for when the visible pipes move out of the screen
+  used_pipeList      % the already used pipes, we keep those pipes so that we can refresh the reserve from the used pipes when we run out
+}).
 % a record used for the whole simulation. this record represents the state of the simulation in a single frame
 -record(sim_state,{tick_time,
   bird,              % the bird running in the current simulation
