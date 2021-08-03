@@ -9,19 +9,15 @@
 -module(genotype).
 -author("omrag").
 
+-include("Constants.hrl").
+
 %% API
 -export([construct_Genotype/3,get_sensors/1,get_actuator/1,get_layer/2,test_Genotype/2,
   get_layer/1,rand_neutron/1,get_nodes/1,mutator/2]).
 
--record(neuron,
- {type,
-  id=erlang:unique_integer(),
-  layer,
-  af=tanh,
-  bias=rand:uniform()}).
 %for test only
 test_Genotype(NumOfLayers,NumOfNeurons) ->
-  ListOfSensors=[#neuron{type = sensor,layer = 0,id=sensor_1},#neuron{type = sensor,layer = 0,id=sensor_2},#neuron{type = sensor,layer = 0,id=sensor_3}],
+  ListOfSensors=[#neuron{type = sensor,layer = 0,id=sensor_1},#neuron{type = sensor,layer = 0,id=sensor_2},#neuron{type = sensor,layer = 0,id=sensor_3},#neuron{type = sensor,layer = 0,id=sensor_4}],
   Genotype=construct_Genotype(ListOfSensors,NumOfLayers,NumOfNeurons),Genotype.
 
 %construct graph with X layers and etch two neighbours layer are connect between them.
@@ -134,14 +130,14 @@ update_layer_add(G,L,N) ->
 %%%     genotype-mutator
 %%%===================================================================
 % add all the the in_neighbours of A as out_neighbours in graph G.
-connect_outport_inport(G,A,B) ->
-  ANeighbours = get_in_neighbours(G,A),
-  [add_edge(G,B,N)||N<-ANeighbours].
-
-% add all the the out_neighbours of A as in_neighbours in graph G.
-connect_inport_outport(G,A,B) ->
-  ANeighbours = get_out_neighbours(G,A),
-  [add_edge(G,N,B)||N<-ANeighbours].
+%%connect_outport_inport(G,A,B) ->
+%%  ANeighbours = get_in_neighbours(G,A),
+%%  [add_edge(G,B,N)||N<-ANeighbours].
+%%
+%%% add all the the out_neighbours of A as in_neighbours in graph G.
+%%connect_inport_outport(G,A,B) ->
+%%  ANeighbours = get_out_neighbours(G,A),
+%%  [add_edge(G,N,B)||N<-ANeighbours].
 
 % the function return random neutron. node == record
 rand_neutron(G) ->
@@ -174,19 +170,15 @@ probability_choice_sq(N) -> Ens = rand:uniform(100), P=100/math:pow(N,1/2),if
                                                 end.
 % chosen between -Pi/2 and Pi/2
 probability_choice_half() ->Ens = rand:uniform(100), if
-                                                      Ens =< 50 -> math:pi() ;
-                                                      true -> - math:pi()
+                                                      Ens =< 50 -> math:pi()/2;
+                                                      true -> - math:pi()/2
                                                     end.
 
-rand_af()->ListOfAf=
-  [gaussian, tanh, cos, sin, sign, bin, trinary, multiquadric, absolute, linear, quadratic, gaussian, sqrt, log, sigmoid, avg, std, gaussian],
-  LengthAf=length(ListOfAf),
+rand_af()->
+  ListOfAf = ?ACTIVATION_FUNCTION_LIST,
+  LengthAf = length(ListOfAf),
   Index = rand:uniform(LengthAf),
   SelectedAf= lists:nth(Index ,ListOfAf),SelectedAf.
-
-
-
-
 
 %%Choose a random neuron A, check if it has a bias in its weights list, if it does
 %%not, add the bias value. If the neuron already has a bias value, do nothing.
@@ -211,8 +203,6 @@ mutate_weights(G,[H|T]) ->
     Pro =:= true -> mod_edge_weight(G,H,probability_choice_half()),mutate_weights(G,T);
     true -> mutate_weights(G,T)
   end.
-
-  
 
 
 %TODO- 3. reset_weights(G)
@@ -263,14 +253,18 @@ add_neuron(G) ->
   SelectedLayer =rand:uniform(NumOfLayers),
   Neuron = #neuron{type = neuron,layer=SelectedLayer, af=rand_af()},
   set_node(G,Neuron),
+  Nodes_until = get_layers_until(G,SelectedLayer),
+  Rand_node_input=rand_element(Nodes_until),
+  add_edge(G,Rand_node_input,Neuron),
   if
-    SelectedLayer =:= NumOfLayers -> update_layer_add(G,NumOfLayers),
+    SelectedLayer =:= NumOfLayers ->
+      update_layer_add(G,NumOfLayers),
       [Actuator]=get_actuator(G),
       add_edge(G,Neuron,Actuator);  %update the actuator layer, new layer is added
-    true -> Nodes=get_layers_from(G,SelectedLayer),
-      SelectedNode=rand_element(Nodes),
-      connect_outport_inport(G,SelectedNode,Neuron)
-
+    true ->
+      Nodes_from = get_layers_from(G,SelectedLayer),
+      Rand_node_output=rand_element(Nodes_from),
+      add_edge(G,Neuron,Rand_node_output)
   end
 .
 %TODO- need to select NodeA and NodeB and copy edge.
@@ -312,46 +306,10 @@ mutator(G,N) -> Index= rand:uniform(8),
     6 -> add_link(G);
     7 -> remove_inlink(G);
     8 -> remove_outlink(G)
-
+    %9 -> add_neuron(G)
   end,
   mutator(G,N-1).
 
-%TODO= 7. add_sensorlink
-%%Compared to the number of neurons, there are very few sensors, and so the
-%%probability of the add_inlink connecting a neuron to a sensor is very low. To
-%%increase the probability that the NN connects to a sensor, we can create the
-%%add_sensorlink mutation operator. This mutation operator first chooses a random
-%%existing sensor A, it then chooses a random neuron B to which A is not yet
-%%connected, and then connects A to B.
-
-%add_sensorlink()
 
 
-%TODO - 8. remove_sensorlink
-%%irst a random sensor A is chosen. From the sensor’s fanout_ids list, a random
-%%neuron id is chosen, and then the sensor is disconnected from the corresponding
-%%neuron.
-
-%remove_sensorlin()
-
-
-%TODO - 9. add_actuatorlink
-%%As in add_sensorlink, when compared to the number of neurons, there are very
-%%few actuators, and so the probability of the add_outlink connecting a neuron to
-%%an actuator is very low. Thus, we can implement the add_actuatorlink to increase
-%%the probability of connecting a neuron to an actuator. In this mutation
-%%operator, first a random actuator A is chosen which is connected to less neurons
-%%than its vl element dictates (an incompletely connected actuator). Then a random
-%%neuron B is chosen to which the actuator is not yet connected. Then A is
-%%connected from B.
-
-%add_actuatorlink()
-
-
-
-%%TODO -10.  remove_actuatorlink:
-%%First a random actuator A is chosen. From the actuator’s fanin_ids list, a random
-%%neuron id is chosen, and then the actuator is disconnected from the corresponding
-%%neuron.
-%remove_actuatorlink()
 

@@ -10,7 +10,7 @@
 -author("tomer").
 
 %% API
--export([simulate_a_frame/2,test/0]).
+-export([simulate_a_frame/2,feature_extraction/1,initiate_simulation/1,simulate_pipes/1,test/0]).
 -include("Constants.hrl").
 %  <- y==0                    |       |
 %                             |       |
@@ -61,6 +61,58 @@ test()->
   io:format("~n~n-----7------~p~n",[{Collide7,Sim7}]),
   {Collide8,Sim8} = simulate_a_frame(Sim7,false),
   io:format("~n~n-----8------~p~n",[{Collide8,Sim8}]).
+initiate_simulation(Pipes)->
+  [First_pipe| Rest] = Pipes,
+  #sim_state{
+    tick_time = 1,
+    bird = #bird_rec{
+      y = ?BIRD_Y_LOCATION,
+      vel = 0,
+      angle = 0,
+      jump_height = 0},
+    visible_pipeList = [First_pipe],
+    extra_pipeList = Rest,
+    used_pipeList = []}.
+feature_extraction(Simulation_State = #sim_state{})->
+  Bird_Y           = Simulation_State#sim_state.bird#bird_rec.y,
+  Bird_Y_vel       = Simulation_State#sim_state.bird#bird_rec.vel,
+  First_pipe = hd(Simulation_State#sim_state.visible_pipeList),
+  Distance_to_pipe = First_pipe#pipe_rec.x - ?BIRD_X_LOCATION,
+  PipeHeight       = First_pipe#pipe_rec.height,
+  [Bird_Y, Bird_Y_vel, Distance_to_pipe, PipeHeight].
+simulate_pipes(Pipe_State = #pipes_graphics_rec{})->
+  % move pipes
+  Moved_pipes = pipe_move(Pipe_State#pipes_graphics_rec.visible_pipeList),
+
+  [First_Pipe|Rest] = Moved_pipes,
+
+  % if we passed the first pipe
+  {VIS,RES,USE} = if
+                    ((not First_Pipe#pipe_rec.passed) and (First_Pipe#pipe_rec.x < ?BIRD_X_LOCATION))->
+                      All_pipes = [First_Pipe#pipe_rec{passed = true}|Rest],
+                      %% ADD PIPE %%
+                      % if reserve List is empty
+                      {Resrve_List,Used_list} = if
+                                                  length(Pipe_State#pipes_graphics_rec.extra_pipeList) =:= 0 ->
+                                                    {lists:reverse(Pipe_State#pipes_graphics_rec.used_pipeList),[]};
+                                                  true                                                    ->
+                                                    {Pipe_State#pipes_graphics_rec.extra_pipeList,Pipe_State#pipes_graphics_rec.used_pipeList}
+                                                end,
+                      [First_Reserve|Rest_Reserve] = Resrve_List,
+                      %  add the new pipe from the reserve list
+                      Vis_Pipe_List = lists:append([All_pipes,[First_Reserve#pipe_rec{x=?WIN_WIDTH,passed = false}]]),
+                      {Vis_Pipe_List,Rest_Reserve,Used_list};
+                    true->
+                      {Moved_pipes,Pipe_State#pipes_graphics_rec.extra_pipeList,Pipe_State#pipes_graphics_rec.used_pipeList}
+                  end,
+
+  % if there is a pipe off-screen remove it
+  {New_visible_pipeList,New_Used_pipes} = case First_Pipe#pipe_rec.x+?PIPE_WIDTH < 0 of
+                                            true->  [A|B] = VIS,{B,[A|USE]};
+                                            false-> {VIS,USE}
+                                          end,
+  #pipes_graphics_rec{visible_pipeList = New_visible_pipeList, extra_pipeList = RES, used_pipeList = New_Used_pipes}.
+
 simulate_a_frame(Simulation_State = #sim_state{},Jump)->
   Tick_time = if
     Jump =:= true -> 1;
@@ -105,7 +157,9 @@ simulate_a_frame(Simulation_State = #sim_state{},Jump)->
     true                      -> pipe_collision_detection(Moved_bird,New_visible_pipeList)
   end,
   % return if collided and new sim state
- {Collide,#bird_graphics_rec{},#sim_state{tick_time = Tick_time, bird = Moved_bird, visible_pipeList = New_visible_pipeList, extra_pipeList = RES, used_pipeList = New_Used_pipes}}.
+  Bird_graphics = #bird_graphics_rec{y = Moved_bird#bird_rec.y,angle = Moved_bird#bird_rec.angle},
+  New_simulation_state = #sim_state{tick_time = Tick_time, bird = Moved_bird, visible_pipeList = New_visible_pipeList, extra_pipeList = RES, used_pipeList = New_Used_pipes},
+ {Collide,Bird_graphics,New_simulation_state}.
 
 bird_move(Bird,Jump,Tick_time)->
   {Vel,Jump_height} = case Jump of
@@ -147,8 +201,8 @@ pipe_collision_detection(Bird,Pipes)->
   Bird_x = ?BIRD_X_LOCATION,
   Bird_y = Bird#bird_rec.y,
   if
-    ((Pipe_x < Bird_x + ?BIRD_RADIUS) and (Bird_x - ?BIRD_RADIUS < Pipe_x + ?PIPE_WIDTH)) and
-    ((Pipe_height > Bird_y + ?BIRD_RADIUS) or (Bird_y - ?BIRD_RADIUS > Pipe_height + ?PIPE_GAP))  -> true;
+    ((Pipe_x < Bird_x + ?BIRD_WIDTH) and (Bird_x < Pipe_x + ?PIPE_WIDTH)) and
+    ((Pipe_height > Bird_y) or (Bird_y + ?BIRD_HEIGHT > Pipe_height + ?PIPE_GAP))  -> true;
     true                                                                                          -> false
   end.
 

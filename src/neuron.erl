@@ -11,17 +11,8 @@
 
 %% API
 -export([init/0,loop/1,test/0]).
+-include("Constants.hrl").
 
-% this record describes the current data used by the neuron.
--record(neuron_data,{
-  id,                 % the id of the current neuron
-  in_pids,            % the pid of all inputs of the current neuron
-  out_pids,           % the pid of all outputs of the current neuron
-  remaining_in_pids,  % the pids which have not yet sent an input to the neuron
-  bias,               % the bias of the neuron calculation
-  af,                 % the activation function used in this neuron
-  acc                 % An Accumulator for the neuron
-}).
 
 % A test function used to test the functionality of the neuron
 test()->
@@ -61,6 +52,7 @@ loop(State = #neuron_data{})->
          0->
           % activate the af function on the acc
           Result = activation_function(State#neuron_data.af, Acc+State#neuron_data.bias),
+           %io:format("--Iam= ~p, Result= ~p~n Weights= ~p~n",[State#neuron_data.id,Result,State#neuron_data.in_pids]),
           % send result to all output recipients
           [Out_Pid!{neuron_send, self(), Result}||Out_Pid <- State#neuron_data.out_pids],
           % restart the neuron to starting position
@@ -68,8 +60,8 @@ loop(State = #neuron_data{})->
         _ ->
           loop(State#neuron_data{acc = Acc,remaining_in_pids = Reduced_in_pids})
       end;
-    _ ->
-      erlang:error("Invalid Message")
+    M ->
+      erlang:error(lists:flatten(io_lib:format("Invalid Message: ~p", [M])))
   end.
 
 % a long list of possible activation function as suggested

@@ -10,27 +10,17 @@
 -author("Omri & Tomer").
 
 -behaviour(gen_statem).
+-include("Constants.hrl").
 
 %% API
--export([start_link/0,idle/3,construct_network/2]).
+-export([start_link/0,start/2,idle/3,simulation/3, evaluation/3]).
 
 %% gen_statem callbacks
 -export([init/1, format_status/2, state_name/3, handle_event/4, terminate/3,
   code_change/4, callback_mode/0]).
-
+-export([message/0]).
 -define(SERVER, ?MODULE).
 
--record(nn_state, {pcPID,genotype,pipList,actuatorPID,sensorsPIDs,simulation}).
--record(neuron, {type,id=erlang:unique_integer(),layer,af=tanh,bias=rand:uniform()}).
--record(neuron_data,{
-  id,                 % the id of the current neuron
-  in_pids,            % the pid of all inputs of the current neuron
-  out_pids,           % the pid of all outputs of the current neuron
-  remaining_in_pids,  % the pids which have not yet sent an input to the neuron
-  bias,               % the bias of the neuron calculation
-  af,                 % the activation function used in this neuron
-  acc=0                % An Accumulator for the neuron
-}).
 %%%===================================================================
 %%% API
 %%%===================================================================
@@ -40,6 +30,10 @@
 %% function does not return until Module:init/1 has returned.
 start_link() ->
   gen_statem:start_link({local, ?SERVER}, ?MODULE, [], []).
+start(Name,{PC_PID}) ->
+  gen_statem:start({local,Name}, ?MODULE, {PC_PID}, []).
+message()->
+  gen_statem:cast(?MODULE,{selection,tea}).
 
 %%%===================================================================
 %%% gen_statem callbacks
@@ -49,14 +43,14 @@ start_link() ->
 %% @doc Whenever a gen_statem is started using gen_statem:start/[3,4] or
 %% gen_statem:start_link/[3,4], this function is called by the new
 %% process to initialize.
-init({PC_PID}) ->
+init({PC_PID}) ->PC_PID!"reached the init",
   {ok, idle, #nn_state{pcPID = PC_PID}}.
 
 %% @private
 %% @doc This function is called by a gen_statem when it needs to find out
 %% the callback mode of the callback module.
 callback_mode() ->
-  handle_event_function.
+  state_functions.
 
 %% @private
 %% @doc Called (1) whenever sys:get_status/1,2 is called by gen_statem or
@@ -74,27 +68,71 @@ format_status(_Opt, [_PDict, _StateName, _State]) ->
 state_name(_EventType, _EventContent, State = #nn_state{}) ->
   NextStateName = next_state,
   {next_state, NextStateName, State}.
+idle(cast,{selection,tea},State)->
+  State#nn_state.pcPID!"reached the selection",
+  {keep_state,State};
 
 idle(cast,{start_simulation,Pc_PID,Genotype,Pipe_list},State) when Pc_PID =:=State#nn_state.pcPID ->
-  NextStateName = construction,
   %TODO- mutator.
-  Actuator_PID=spawn(fun()->construct_network(Genotype,self())end),
+  State#nn_state.pcPID!"reached idle",
+
+  if
+    State#nn_state.require_mutation =:= true -> genotype:mutator(Genotype,?NUMBER_OF_MUTATION);
+    true                                     -> ok
+  end,
+  io:format("hello world!~n"),
+  Pc_PID!"bob got message",
+
+
+  Me = self(),
+  Actuator_PID=spawn(fun()->construct_network(Genotype,Me)end),
   %TODO- send to pc the new genotype.
   New_stat=State#nn_state{pipList = Pipe_list,genotype = Genotype,actuatorPID=Actuator_PID},
+  {keep_state, New_stat};
+
+idle(info,{finished_constructing, ActuatorPid, SensorsPIDs},State) when ActuatorPid =:= State#nn_state.actuatorPID ->
+  % initiate simulation
+  Simulation = simulation:initiate_simulation(State#nn_state.pipList),
+  State#nn_state.pcPID!"finished construction",
+  Features = simulation:feature_extraction(Simulation),
+  send_to_sensors(Features, SensorsPIDs),
+  NewState = State#nn_state{simulation = Simulation,sensorsPIDs = SensorsPIDs},
+  {next_state, simulation, NewState}.
+
+
+simulation(info,{neuron_send, ActuatorPid, Value},State) when ActuatorPid =:= State#nn_state.actuatorPID ->
+  % translate output to binary
+  Jump = if
+    Value>0.5 -> true;
+    true      -> false
+  end,
+  io:format("Jump Value= ~p~n",[Value]),
+  % simulate a frame
+  {Collide,Bird_graphics,New_simulation_state} = simulation:simulate_a_frame(State#nn_state.simulation,Jump),
+  NewState = State#nn_state{simulation = New_simulation_state},
+  graphics!{bird_update,self(),{Collide,Bird_graphics}},
+  case Collide of
+    false -> % if survived
+      Features = simulation:feature_extraction(New_simulation_state),
+      io:format("sensor inputs= ~p~n",[Features]),
+      send_to_sensors(Features, State#nn_state.sensorsPIDs),
+      {keep_state,NewState};
+    true-> % if died
+      {next_state,evaluation,NewState}
+  end.
+
+
+
+evaluation(cast,{kill,PcPID},State) when PcPID =:= State#nn_state.pcPID ->
+  State#nn_state.actuatorPID ! {kill,self()}, %TODO - add to neuron kill message, if the actuator proses is dane is kill all ? (spawn_link) Tomer
+  New_state=State#nn_state{require_mutation =true},
+  NextStateName = idle,
+  {next_state, NextStateName, New_state};
+evaluation(cast,{keep,PcPID,Pipe_list},State) when PcPID =:= State#nn_state.pcPID ->
+  NextStateName = simulation,
+  Simulation = simulation:initiate_simulation(Pipe_list),
+  New_stat =State#nn_state{simulation = Simulation, pipList =Pipe_list},
   {next_state, NextStateName, New_stat}.
-
-
-construction(cast,{finished_constructing,_,SensorsPIDs},State)  ->
-  NextStateName = simulation,New_stat =State#nn_state{sensorsPIDs = SensorsPIDs},
-  {next_state, NextStateName, New_stat}.
-
-
-simulation(cast,{start_simulation,Pc_PID},State) when Pc_PID =:= State#nn_state.pcPID -> ok .
-
-
-
-%TODO - evaluation state
-%create_network(cast,{},State)->
 
 
 %% @private
@@ -122,6 +160,9 @@ code_change(_OldVsn, StateName, State = #nn_state{}, _Extra) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
+send_to_sensors(Features, SensorsPIDs)->
+  Zipped_sensor_inputs = lists:zip(Features, SensorsPIDs),
+  [Sensor!{neuron_send, self(), Value}||{Value,Sensor}<-Zipped_sensor_inputs].
 
 % construct the neural network(genotype->phenotype), send to Network message:finished_constructing, then beaver like neuron.
 construct_network(G,NnPID)->
@@ -133,6 +174,7 @@ construct_network(G,NnPID)->
   SensorsPIDs=get_sensor_PIDs(G,NewIdToPIDs),
   configure_nn(G,NewIdToPIDs),
   In_pids=get_weights_map(G,Actuator,NewIdToPIDs),
+  io:format("Actuator activation function~p~n",[Actuator#neuron.af]),
   NeuronActuator=#neuron_data{id=SelfPID,in_pids=In_pids,out_pids=[NnPID],remaining_in_pids=In_pids,bias=Actuator#neuron.bias,af=Actuator#neuron.af},
   NnPID ! {finished_constructing,SelfPID,SensorsPIDs},
   neuron:loop(NeuronActuator).
@@ -161,7 +203,7 @@ configure_nn(G,IdToPIDs,[H|T])-> if
                                          NnPid=maps:get(nnPID,IdToPIDs),
                                          OutPIDs=get_out_PIDs(G,H,IdToPIDs),
                                          HeadPid=maps:get(H#neuron.id,IdToPIDs),
-                                         Neuron=#neuron_data{id =HeadPid,in_pids=#{NnPid => 1},out_pids=OutPIDs,remaining_in_pids=#{NnPid => 1},bias=H#neuron.bias,af=none},
+                                         Neuron=#neuron_data{id =HeadPid,in_pids=#{NnPid => 1},out_pids=OutPIDs,remaining_in_pids=#{NnPid => 1},bias=0,af=none},
                                          HeadPid ! {configure_neuron,self(),Neuron},configure_nn(G,IdToPIDs,T);
                                       H#neuron.type=:=actuator->
                                         configure_nn(G,IdToPIDs,T);
