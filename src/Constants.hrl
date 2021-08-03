@@ -47,17 +47,6 @@
 -define(ACTIVATION_FUNCTION_LIST,[gaussian, tanh, cos, sin, sign, bin, trinary, multiquadric, absolute, linear, quadratic, gaussian, sqrt, log, sigmoid, avg, std, gaussian]).
 -define(NUMBER_OF_MUTATION, 3).
 
-%% GRAPHICS RECORDS %%
--record(graphics_state, {
-  frame, panel, dc, paint, list,
-  simulation,collide = false,time = 0, base_state,
-  bmpRMap,bmpB1Map,bmpB2Map,bmpB3Map,bmpB4Map,bmpPipeMap,bmpBaseMap}).
--record(base_state,{
-  x1 = 0,
-  x2 = ?BASE_WIDTH
-}).
-
-
 %% SIMULATION RECORDS %%
 -record(pipe_rec,{height,x,passed}).
 
@@ -71,8 +60,8 @@
 
 % a compressed record holding only the data used for the birds graphics
 -record(bird_graphics_rec,{
-  y,     % Y coordinate of the bird
-  angle  % Angle of the bird
+  y = ?BIRD_Y_LOCATION,     % Y coordinate of the bird
+  angle = 0  % Angle of the bird
 }).
 -record(pipes_graphics_rec,{
   visible_pipeList,  % the pipes which are visible on screen
@@ -87,6 +76,19 @@
   used_pipeList}).   % the already used pipes, we keep those pipes so that we can refresh the reserve from the used pipes when we run out
 
 
+%% GRAPHICS RECORDS %%
+-record(graphics_state, {
+  frame, panel, dc, paint, list,
+  simulation,collide = false,time = 0, base_state, bird_list = queue:new(), pipes_state, current_bird_state = #bird_graphics_rec{},
+  bmpRMap,bmpB1Map,bmpB2Map,bmpB3Map,bmpB4Map,bmpPipeMap,bmpBaseMap}).
+-record(base_state,{
+  x1 = 0,
+  x2 = ?BASE_WIDTH
+}).
+
+
+
+
 %% NEURAL NETWORK RECORDS %%
 -record(nn_state, {
   pcPID,
@@ -98,7 +100,7 @@
   graphics_ets = none,
   require_mutation
 }).
--record(neuron, {type,id=erlang:unique_integer(),layer,af=tanh,bias=rand:uniform()}).
+-record(neuron, {type,id=erlang:unique_integer(),layer,af=sin,bias=rand:uniform()}).
 -record(neuron_data,{
   id,                 % the id of the current neuron
   in_pids,            % the pid of all inputs of the current neuron

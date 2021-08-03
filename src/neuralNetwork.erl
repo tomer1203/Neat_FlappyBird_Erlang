@@ -106,14 +106,15 @@ simulation(info,{neuron_send, ActuatorPid, Value},State) when ActuatorPid =:= St
     Value>0.5 -> true;
     true      -> false
   end,
-
+  io:format("Jump Value= ~p~n",[Value]),
   % simulate a frame
   {Collide,Bird_graphics,New_simulation_state} = simulation:simulate_a_frame(State#nn_state.simulation,Jump),
   NewState = State#nn_state{simulation = New_simulation_state},
-  graphics!{bird_update,self(),{Collide,New_simulation_state}},
+  graphics!{bird_update,self(),{Collide,Bird_graphics}},
   case Collide of
     false -> % if survived
       Features = simulation:feature_extraction(New_simulation_state),
+      io:format("sensor inputs= ~p~n",[Features]),
       send_to_sensors(Features, State#nn_state.sensorsPIDs),
       {keep_state,NewState};
     true-> % if died
@@ -173,6 +174,7 @@ construct_network(G,NnPID)->
   SensorsPIDs=get_sensor_PIDs(G,NewIdToPIDs),
   configure_nn(G,NewIdToPIDs),
   In_pids=get_weights_map(G,Actuator,NewIdToPIDs),
+  io:format("Actuator activation function~p~n",[Actuator#neuron.af]),
   NeuronActuator=#neuron_data{id=SelfPID,in_pids=In_pids,out_pids=[NnPID],remaining_in_pids=In_pids,bias=Actuator#neuron.bias,af=Actuator#neuron.af},
   NnPID ! {finished_constructing,SelfPID,SensorsPIDs},
   neuron:loop(NeuronActuator).
@@ -201,7 +203,7 @@ configure_nn(G,IdToPIDs,[H|T])-> if
                                          NnPid=maps:get(nnPID,IdToPIDs),
                                          OutPIDs=get_out_PIDs(G,H,IdToPIDs),
                                          HeadPid=maps:get(H#neuron.id,IdToPIDs),
-                                         Neuron=#neuron_data{id =HeadPid,in_pids=#{NnPid => 1},out_pids=OutPIDs,remaining_in_pids=#{NnPid => 1},bias=H#neuron.bias,af=none},
+                                         Neuron=#neuron_data{id =HeadPid,in_pids=#{NnPid => 1},out_pids=OutPIDs,remaining_in_pids=#{NnPid => 1},bias=0,af=none},
                                          HeadPid ! {configure_neuron,self(),Neuron},configure_nn(G,IdToPIDs,T);
                                       H#neuron.type=:=actuator->
                                         configure_nn(G,IdToPIDs,T);

@@ -10,7 +10,7 @@
 -author("tomer").
 
 %% API
--export([simulate_a_frame/2,feature_extraction/1,initiate_simulation/1,test/0]).
+-export([simulate_a_frame/2,feature_extraction/1,initiate_simulation/1,simulate_pipes/1,test/0]).
 -include("Constants.hrl").
 %  <- y==0                    |       |
 %                             |       |

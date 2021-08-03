@@ -296,7 +296,7 @@ remove_outlink(G) ->
   end.
 
 mutator(_,0) -> ok;
-mutator(G,N) -> Index= rand:uniform(9),
+mutator(G,N) -> Index= rand:uniform(8),
   case Index of
     1 -> add_bias(G);
     2 -> remove_bias(G);
@@ -305,8 +305,8 @@ mutator(G,N) -> Index= rand:uniform(9),
     5 -> remove_neuron(G);
     6 -> add_link(G);
     7 -> remove_inlink(G);
-    8 -> remove_outlink(G);
-    9 -> add_neuron(G)
+    8 -> remove_outlink(G)
+    %9 -> add_neuron(G)
   end,
   mutator(G,N-1).
 
