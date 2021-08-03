@@ -130,14 +130,14 @@ update_layer_add(G,L,N) ->
 %%%     genotype-mutator
 %%%===================================================================
 % add all the the in_neighbours of A as out_neighbours in graph G.
-connect_outport_inport(G,A,B) ->
-  ANeighbours = get_in_neighbours(G,A),
-  [add_edge(G,B,N)||N<-ANeighbours].
-
-% add all the the out_neighbours of A as in_neighbours in graph G.
-connect_inport_outport(G,A,B) ->
-  ANeighbours = get_out_neighbours(G,A),
-  [add_edge(G,N,B)||N<-ANeighbours].
+%%connect_outport_inport(G,A,B) ->
+%%  ANeighbours = get_in_neighbours(G,A),
+%%  [add_edge(G,B,N)||N<-ANeighbours].
+%%
+%%% add all the the out_neighbours of A as in_neighbours in graph G.
+%%connect_inport_outport(G,A,B) ->
+%%  ANeighbours = get_out_neighbours(G,A),
+%%  [add_edge(G,N,B)||N<-ANeighbours].
 
 % the function return random neutron. node == record
 rand_neutron(G) ->
@@ -253,14 +253,18 @@ add_neuron(G) ->
   SelectedLayer =rand:uniform(NumOfLayers),
   Neuron = #neuron{type = neuron,layer=SelectedLayer, af=rand_af()},
   set_node(G,Neuron),
+  Nodes_until = get_layers_until(G,SelectedLayer),
+  Rand_node_input=rand_element(Nodes_until),
+  add_edge(G,Rand_node_input,Neuron),
   if
-    SelectedLayer =:= NumOfLayers -> update_layer_add(G,NumOfLayers),
+    SelectedLayer =:= NumOfLayers ->
+      update_layer_add(G,NumOfLayers),
       [Actuator]=get_actuator(G),
       add_edge(G,Neuron,Actuator);  %update the actuator layer, new layer is added
-    true -> Nodes=get_layers_from(G,SelectedLayer),
-      SelectedNode=rand_element(Nodes),
-      connect_outport_inport(G,SelectedNode,Neuron)
-
+    true ->
+      Nodes_from = get_layers_from(G,SelectedLayer),
+      Rand_node_output=rand_element(Nodes_from),
+      add_edge(G,Neuron,Rand_node_output)
   end
 .
 %TODO- need to select NodeA and NodeB and copy edge.
@@ -292,7 +296,7 @@ remove_outlink(G) ->
   end.
 
 mutator(_,0) -> ok;
-mutator(G,N) -> Index= rand:uniform(8),
+mutator(G,N) -> Index= rand:uniform(9),
   case Index of
     1 -> add_bias(G);
     2 -> remove_bias(G);
@@ -301,47 +305,11 @@ mutator(G,N) -> Index= rand:uniform(8),
     5 -> remove_neuron(G);
     6 -> add_link(G);
     7 -> remove_inlink(G);
-    8 -> remove_outlink(G)
-
+    8 -> remove_outlink(G);
+    9 -> add_neuron(G)
   end,
   mutator(G,N-1).
 
-%TODO= 7. add_sensorlink
-%%Compared to the number of neurons, there are very few sensors, and so the
-%%probability of the add_inlink connecting a neuron to a sensor is very low. To
-%%increase the probability that the NN connects to a sensor, we can create the
-%%add_sensorlink mutation operator. This mutation operator first chooses a random
-%%existing sensor A, it then chooses a random neuron B to which A is not yet
-%%connected, and then connects A to B.
-
-%add_sensorlink()
 
 
-%TODO - 8. remove_sensorlink
-%%irst a random sensor A is chosen. From the sensor’s fanout_ids list, a random
-%%neuron id is chosen, and then the sensor is disconnected from the corresponding
-%%neuron.
-
-%remove_sensorlin()
-
-
-%TODO - 9. add_actuatorlink
-%%As in add_sensorlink, when compared to the number of neurons, there are very
-%%few actuators, and so the probability of the add_outlink connecting a neuron to
-%%an actuator is very low. Thus, we can implement the add_actuatorlink to increase
-%%the probability of connecting a neuron to an actuator. In this mutation
-%%operator, first a random actuator A is chosen which is connected to less neurons
-%%than its vl element dictates (an incompletely connected actuator). Then a random
-%%neuron B is chosen to which the actuator is not yet connected. Then A is
-%%connected from B.
-
-%add_actuatorlink()
-
-
-
-%%TODO -10.  remove_actuatorlink:
-%%First a random actuator A is chosen. From the actuator’s fanin_ids list, a random
-%%neuron id is chosen, and then the actuator is disconnected from the corresponding
-%%neuron.
-%remove_actuatorlink()
 

@@ -97,6 +97,7 @@ handle_sync_event(#wx{event=#wxPaint{}}, _,  _State = #graphics_state{panel = Pa
     wxDC:clear(DC2),
     wxDC:drawBitmap(DC2,BmpRmap,{0,0}),
 
+
     draw_bird(DC2,BmpB1Map,BmpB2Map,BmpB3Map,?BIRD_X_LOCATION,round(SimState#sim_state.bird#bird_rec.y),SimState#sim_state.bird#bird_rec.angle,Time),
     [draw_pipe(DC2,BmpPipeMap,Pipe#pipe_rec.x,Pipe#pipe_rec.height)||Pipe <- SimState#sim_state.visible_pipeList],
     draw_base(DC2, BmpBaseMap, Base_rec#base_state.x1, Base_rec#base_state.x2),

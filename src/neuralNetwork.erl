@@ -13,7 +13,7 @@
 -include("Constants.hrl").
 
 %% API
--export([start_link/0,idle/3,simulation/3]).
+-export([start_link/0,idle/3,simulation/3, evaluation/3]).
 
 %% gen_statem callbacks
 -export([init/1, format_status/2, state_name/3, handle_event/4, terminate/3,
@@ -114,9 +114,16 @@ simulation(cast,{neuron_send, ActuatorPid, Value},State) when ActuatorPid =:= St
     % move to evaluate state
 
 
-
-%TODO - evaluation state
-%create_network(cast,{},State)->
+evaluation(cast,{kill,PcPID},State) when PcPID =:= State#nn_state.pcPID ->
+  State#nn_state.actuatorPID ! {kill,self()}, %TODO - add to neuron kill message, if the actuator proses is dane is kill all ? (spawn_link) Tomer
+  New_state=State#nn_state{require_mutation =true},
+  NextStateName = idle,
+  {next_state, NextStateName, New_state};
+evaluation(cast,{keep,PcPID,Pipe_list},State) when PcPID =:= State#nn_state.pcPID ->
+  NextStateName = simulation,
+  Simulation = simulation:initiate_simulation(Pipe_list),
+  New_stat =State#nn_state{simulation = Simulation, pipList =Pipe_list},
+  {next_state, NextStateName, New_stat}.
 
 
 %% @private
@@ -147,6 +154,7 @@ code_change(_OldVsn, StateName, State = #nn_state{}, _Extra) ->
 send_to_sensors(Features, SensorsPIDs)->
   Zipped_sensor_inputs = lists:zip(Features, SensorsPIDs),
   [Sensor!{neuron_send, self(), Value}||{Value,Sensor}<-Zipped_sensor_inputs].
+
 % construct the neural network(genotype->phenotype), send to Network message:finished_constructing, then beaver like neuron.
 construct_network(G,NnPID)->
   [Actuator]=genotype:get_actuator(G),
