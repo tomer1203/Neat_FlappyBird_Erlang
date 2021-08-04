@@ -1,5 +1,5 @@
 %%%-------------------------------------------------------------------
-%%% @author tomer
+%%% @author Omri, Tomer
 %%% @copyright (C) 2021, <COMPANY>
 %%% @doc
 %%%
@@ -7,10 +7,10 @@
 %%% Created : 03. Aug 2021 21:03
 %%%-------------------------------------------------------------------
 -module(main).
--author("tomer").
+-author("Omri, Tomer").
 
 %% API
--export([test/1]).
+-export([test/1,loop/1]).
 test(Name)->
   %Pipes = graphics:generate_pipes(5),
   %graphics:start(Pipes),
@@ -19,3 +19,8 @@ test(Name)->
 %%  E = graph_visualization:getEdgesList(G),
 %%  V = graph_visualization:getVerticesList(G),
     plot_graph:to_file( G ,Name, "png").
+
+
+loop(N)->
+  io:format("~p~n",[N]),
+  loop(N+1).

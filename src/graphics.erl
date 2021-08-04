@@ -1,5 +1,5 @@
 %%%-------------------------------------------------------------------
-%%% @author tomer
+%%% @author Omri, Tomer
 %%% @copyright (C) 2021, <COMPANY>
 %%% @doc
 %%%
@@ -7,7 +7,7 @@
 %%% Created : 25. Jul 2021 18:14
 %%%-------------------------------------------------------------------
 -module(graphics).
--author("tomer").
+-author("Omri, Tomer").
 
 -behaviour(wx_object).
 

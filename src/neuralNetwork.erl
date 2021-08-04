@@ -18,7 +18,6 @@
 %% gen_statem callbacks
 -export([init/1, format_status/2, state_name/3, handle_event/4, terminate/3,
   code_change/4, callback_mode/0]).
--export([message/0]).
 -define(SERVER, ?MODULE).
 
 %%%===================================================================
@@ -30,10 +29,8 @@
 %% function does not return until Module:init/1 has returned.
 start_link() ->
   gen_statem:start_link({local, ?SERVER}, ?MODULE, [], []).
-start(Name,{PC_PID}) ->
-  gen_statem:start({local,Name}, ?MODULE, {PC_PID}, []).
-message()->
-  gen_statem:cast(?MODULE,{selection,tea}).
+start(Name,PC_PID) ->
+  gen_statem:start({local,Name}, ?MODULE, [PC_PID], []).
 
 %%%===================================================================
 %%% gen_statem callbacks
@@ -43,7 +40,7 @@ message()->
 %% @doc Whenever a gen_statem is started using gen_statem:start/[3,4] or
 %% gen_statem:start_link/[3,4], this function is called by the new
 %% process to initialize.
-init({PC_PID}) ->PC_PID!"reached the init",
+init([PC_PID]) ->PC_PID!"reached the init",
   {ok, idle, #nn_state{pcPID = PC_PID}}.
 
 %% @private
@@ -68,9 +65,6 @@ format_status(_Opt, [_PDict, _StateName, _State]) ->
 state_name(_EventType, _EventContent, State = #nn_state{}) ->
   NextStateName = next_state,
   {next_state, NextStateName, State}.
-idle(cast,{selection,tea},State)->
-  State#nn_state.pcPID!"reached the selection",
-  {keep_state,State};
 
 idle(cast,{start_simulation,Pc_PID,Genotype,Pipe_list},State) when Pc_PID =:=State#nn_state.pcPID ->
   %TODO- mutator.
@@ -110,7 +104,13 @@ simulation(info,{neuron_send, ActuatorPid, Value},State) when ActuatorPid =:= St
   % simulate a frame
   {Collide,Bird_graphics,New_simulation_state} = simulation:simulate_a_frame(State#nn_state.simulation,Jump),
   NewState = State#nn_state{simulation = New_simulation_state},
-  graphics!{bird_update,self(),{Collide,Bird_graphics}},
+
+  % send the current frame to graphics(only if you are subscribed to him)
+  if
+    State#nn_state.sub2graphics =:= true -> graphics!{bird_update,self(),{Collide,Bird_graphics}};
+    true                                 -> ok
+  end,
+
   case Collide of
     false -> % if survived
       Features = simulation:feature_extraction(New_simulation_state),
@@ -118,6 +118,7 @@ simulation(info,{neuron_send, ActuatorPid, Value},State) when ActuatorPid =:= St
       send_to_sensors(Features, State#nn_state.sensorsPIDs),
       {keep_state,NewState};
     true-> % if died
+      gen_server:cast(State#nn_state.pcPID,{finished_simulation,self(),New_simulation_state#sim_state.total_time}),
       {next_state,evaluation,NewState}
   end.
 

@@ -12,7 +12,9 @@
 -behaviour(gen_server).
 
 %% API
--export([start_link/0]).
+-export([start_link/6,start/6]).
+
+-export([nn_monitor/1]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2,
@@ -20,31 +22,43 @@
 
 -define(SERVER, ?MODULE).
 
--record(pc_server_state, {}).
+-record(pc_server_state, {pc_num,number_of_networks,gen_ets,fitness_ets, remaining_networks, learning_pid}).
 
 %%%===================================================================
 %%% API
 %%%===================================================================
 
 %% @doc Spawns the server and registers the local name (unique)
--spec(start_link() ->
+-spec(start_link(Name::atom(),Pc_num::integer(), Learning_pid::pid(), Number_of_networks ::integer(),Num_Layers::integer(),Num_Neurons_Per_Layer::integer()) ->
   {ok, Pid :: pid()} | ignore | {error, Reason :: term()}).
-start_link() ->
-  gen_server:start_link({local, ?SERVER}, ?MODULE, [], []).
+start_link(Name,Pc_num, Learning_pid, Number_of_networks,Num_Layers,Num_Neurons_Per_Layer) ->
+  gen_server:start_link({local, Name}, ?MODULE, [Pc_num, Learning_pid, Number_of_networks,Num_Layers,Num_Neurons_Per_Layer], []).
 
+-spec(start(Name::atom(),Pc_num :: integer(),Learning_pid::pid(), Number_of_networks ::integer(),Num_Layers::integer(),Num_Neurons_Per_Layer::integer()) ->
+  {ok, Pid :: pid()} | ignore | {error, Reason :: term()}).
+start(Name,Pc_num,Learning_pid,Number_of_networks,Num_Layers,Num_Neurons_Per_Layer) ->
+  gen_server:start({local, Name}, ?MODULE, [Pc_num,Learning_pid,Number_of_networks,Num_Layers,Num_Neurons_Per_Layer], []).
 %%%===================================================================
 %%% gen_server callbacks
 %%%===================================================================
 
 %% @private
 %% @doc Initializes the server
--spec(init(Args :: term()) ->
+-spec(init(N :: integer()) ->
   {ok, State :: #pc_server_state{}} | {ok, State :: #pc_server_state{}, timeout() | hibernate} |
   {stop, Reason :: term()} | ignore).
-init([Genotype_list]) ->PID_genotype_map =#{},
-  [maps:put(G,spawn_monitor(neuralNetwork:start_link()),PID_genotype_map)  || G <-Genotype_list],
+init([Pc_num,Learning_pid,Number_of_networks,Num_Layers,Num_Neurons_Per_Layer]) ->
+  %PID_genotype_map =#{},
+  Networks = construct_networks(Pc_num,Number_of_networks,Num_Layers,Num_Neurons_Per_Layer),
+  %[maps:put(G,spawn_monitor(neuralNetwork:start_link()),PID_genotype_map)  || G <-Genotype_list],
+  %ets:insert(tableEx9, {K,V})
+  Gen_ets = ets:new(gen_ets,[set]),
+  Fitness_ets = ets:new(fitness_ets,[set]),
+  [ets:insert(gen_ets,{Pid,Graph})||{Pid,Graph}<-Networks],
 
-  {ok, #pc_server_state{}}.
+  {ok, #pc_server_state{pc_num = Pc_num, learning_pid = Learning_pid,
+    number_of_networks = Number_of_networks,gen_ets = Gen_ets,
+    fitness_ets = Fitness_ets, remaining_networks = Number_of_networks}}.
 
 %% @private
 %% @doc Handling call messages
@@ -65,8 +79,37 @@ handle_call(_Request, _From, State = #pc_server_state{}) ->
   {noreply, NewState :: #pc_server_state{}} |
   {noreply, NewState :: #pc_server_state{}, timeout() | hibernate} |
   {stop, Reason :: term(), NewState :: #pc_server_state{}}).
+
+handle_cast({start_simulation,From,Pipe_list}, State = #pc_server_state{})when From =:= State#pc_server_state.learning_pid->
+  First_key = ets:first(gen_ets),
+  start_networks(First_key,Pipe_list),
+  {noreply, State};
+
+% A message from one of the neural networks to the Pc updating it how the simulation went
+handle_cast({finished_simulation,From,Time}, State = #pc_server_state{remaining_networks = 0})->
+  exit("Pc exiting received too many finished simulation messages");
+handle_cast({finished_simulation,From,Time}, State = #pc_server_state{remaining_networks = 1})->
+  ets:insert(fitness_ets,{From,Time}),
+  %TODO: Send fitness scores to learning fsm(either through messages or through ets)
+  {noreply, State#pc_server_state{remaining_networks = 0}};
+handle_cast({finished_simulation,From,Time}, State = #pc_server_state{remaining_networks = Remaining_networks})->
+  ets:insert(fitness_ets,{From,Time}),
+  {noreply, State#pc_server_state{remaining_networks = Remaining_networks-1}};
+
+handle_cast({network_feedback,From,PipeList,KeepList}, State = #pc_server_state{})when From =:= State#pc_server_state.learning_pid->
+  % get list of all available networks(the ones that were killed), a list of the networks to keep and a list of the genotypes to mutate
+  {KeepList,KillList,MutateList}=parseKeepList(KeepList),
+  % send a keep message to all the keep networks
+  [gen_statem:cast(NetworkPid,{keep,self(),PipeList,Subscribe})||{NetworkPid,Subscribe}<-KeepList],
+  % send a kill message to all the kill networks
+  [gen_statem:cast(NetworkPid,{kill,self()})||NetworkPid<-KillList],
+  % for every genotype in the mutate list pass it to one of the dead networks
+  mutate_and_restart_networks(KillList,MutateList,PipeList);
+
 handle_cast(_Request, State = #pc_server_state{}) ->
   {noreply, State}.
+
+
 
 %% @private
 %% @doc Handling all non call/cast messages
@@ -74,6 +117,8 @@ handle_cast(_Request, State = #pc_server_state{}) ->
   {noreply, NewState :: #pc_server_state{}} |
   {noreply, NewState :: #pc_server_state{}, timeout() | hibernate} |
   {stop, Reason :: term(), NewState :: #pc_server_state{}}).
+% A debug message, it is ignored for now
+handle_info({finished_constructing,From}, State = #pc_server_state{})-> {noreply,State};
 handle_info(_Info, State = #pc_server_state{}) ->
   {noreply, State}.
 
@@ -98,7 +143,59 @@ code_change(_OldVsn, State = #pc_server_state{}, _Extra) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
+construct_networks(Pc_num,N,Num_Layers,Num_Neurons_Per_Layer)->
+  construct_networks(Pc_num,N,self(),Num_Layers,Num_Neurons_Per_Layer,[]).
 
-put_and_send(G,PID,Map) ->
-  maps:put(G,spawn_monitor(neuralNetwork:start_link()),Map),
-  PID ! {start_simulation,self(),G,Pipe_list}
+construct_networks(_Pc_num,0,_Self,_Num_Layers,_Num_Neurons_Per_Layer,Acc)-> Acc;
+construct_networks(Pc_num,N,Self,Num_Layers,Num_Neurons_Per_Layer,Acc)->
+  G = genotype:test_Genotype(Num_Layers,Num_Neurons_Per_Layer),
+  {ok,Proc} = neuralNetwork:start(get_nn_name(Pc_num,N),Self),
+  spawn(?MODULE, nn_monitor, [Proc]),
+  construct_networks(Pc_num,N-1,Self,Num_Layers,Num_Neurons_Per_Layer,[{Proc,G}|Acc]).
+
+% monitors a neural network and waits checks if it is down.
+nn_monitor(Proc) ->
+  erlang:monitor(process,Proc),
+  receive
+    {'DOWN', Ref, process, Pid,  normal} ->
+      io:format("~p said that ~p died by natural causes~n",[Ref,Pid]);%TODO: if network is down we need to restart it!
+    {'DOWN', Ref, process, Pid,  Reason} ->
+      io:format("~p said that ~p died by unnatural causes~n~p",[Ref,Pid,Reason]) %TODO: if network is down we need to restart it!
+  end.
+
+% opens up the networks
+start_networks('$end_of_table',_Pipes)->ok;
+start_networks(Key,Pipes)->
+  G=ets:lookup(gen_ets,Key),
+  gen_statem:cast(Key,{start_simulation,self(),G,Pipes}),
+  Next_key = ets:next(gen_ets,Key),
+  start_networks(Next_key,Pipes).
+
+get_nn_name(Pc_num,N)->lists:append("nn_",integer_to_list(Pc_num*100+N)).
+%put_and_send(G,PID,Map,Pipe_list) ->ok.
+
+% turn the keep list into a list of the networks to kill the networks to keep and which genotypes
+% to mutate and how many times. the sum of the mutate list should be equal to the dead networks.
+parseKeepList(KeepList)->parseKeepList(KeepList,[],[],[]).
+parseKeepList([],KeepAcc,KillAcc,MutateAcc)->{KeepAcc,KillAcc,MutateAcc};
+parseKeepList([{NetworkPid,Keep,Subscribe}|KeepList],KeepAcc,KillAcc,MutateAcc)->
+  case Keep of
+    0 -> % kill network
+      parseKeepList(KeepList,KeepAcc,[NetworkPid|KillAcc],MutateAcc);
+    1 -> % keep but don't mutate
+      parseKeepList(KeepList,[{NetworkPid,Subscribe}|KeepAcc],KillAcc,MutateAcc);
+    N -> % keep and mutate N times
+      Gen = ets:lookup(gen_ets,NetworkPid),
+      parseKeepList(KeepList,[{NetworkPid,Subscribe}|KeepAcc],KillAcc,[{Gen,N},MutateAcc])
+  end.
+mutate_and_restart_networks([],[],PipeList)->ok;
+mutate_and_restart_networks(KillList,[{Gen,0}|MutateList],PipeList)->mutate_and_restart_networks(KillList,MutateList,PipeList);
+mutate_and_restart_networks([],MutateList,PipeList)->exit("there are more mutations than networks to put them in");
+mutate_and_restart_networks(KillList,[],PipeList)->exit("there are more dead networks than mutations to put in them");
+mutate_and_restart_networks([NetworkPid|KillList],[{Gen,N}|MutateList],PipeList)->
+  assignGenToNetwork(NetworkPid,Gen,PipeList),
+  mutate_and_restart_networks(KillList,[{Gen,N-1}|MutateList],PipeList),
+
+  ok.
+%TODO how can we mutate a network but still keep a copy of the original the same?
+assignGenToNetwork(NetworkPid,Gen,PipeList)->ok.

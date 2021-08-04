@@ -158,7 +158,7 @@ simulate_a_frame(Simulation_State = #sim_state{},Jump)->
   end,
   % return if collided and new sim state
   Bird_graphics = #bird_graphics_rec{y = Moved_bird#bird_rec.y,angle = Moved_bird#bird_rec.angle},
-  New_simulation_state = #sim_state{tick_time = Tick_time, bird = Moved_bird, visible_pipeList = New_visible_pipeList, extra_pipeList = RES, used_pipeList = New_Used_pipes},
+  New_simulation_state = #sim_state{total_time = Simulation_State#sim_state.total_time+1, tick_time = Tick_time, bird = Moved_bird, visible_pipeList = New_visible_pipeList, extra_pipeList = RES, used_pipeList = New_Used_pipes},
  {Collide,Bird_graphics,New_simulation_state}.
 
 bird_move(Bird,Jump,Tick_time)->
