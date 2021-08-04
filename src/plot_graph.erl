@@ -6,7 +6,7 @@
 %%% @end
 %%% Created : 03. Oct 2020 15:55
 %%%-------------------------------------------------------------------
--module(graph_visualization).
+-module(plot_graph).
 -author("chass").
 
 %% API
@@ -24,7 +24,7 @@ to_file(Graph, File, Format) ->
   to_dot(Graph, DotFile),
   DotCommant = lists:concat(["dot -T", Format, " -o", File, " ", DotFile]),
   X=os:cmd(DotCommant),
-  %file:delete(DotFile),
+  file:delete(DotFile),
   X.
 plotEdge(Edge,IODevice)->
   {_,Node1ID,Node2ID,Weight}=Edge,

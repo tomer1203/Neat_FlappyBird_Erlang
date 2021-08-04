@@ -13,7 +13,7 @@
 
 %% API
 -export([construct_Genotype/3,get_sensors/1,get_actuator/1,get_layer/2,test_Genotype/2,
-  get_layer/1,rand_neutron/1,get_nodes/1,mutator/2]).
+  get_layer/1,rand_neutron/1,get_nodes/1,getEdges/1,mutator/2]).
 
 %for test only
 test_Genotype(NumOfLayers,NumOfNeurons) ->
@@ -87,6 +87,10 @@ set_edge_weight(G,Edge,NewWeight) -> {E,Node1ID,Node2ID,_}= digraph:edge(G,Edge)
 mod_edge_weight(G,Edge,NewWeight ) -> {E,Node1ID,Node2ID,Weight}= digraph:edge(G,Edge) ,digraph: add_edge(G,E,Node1ID,Node2ID,NewWeight+Weight).
 %add edge form X to Y whit random weight.
 add_edge(G,X,Y)->digraph:add_edge(G,X#neuron.id,Y#neuron.id,rand:uniform()).
+
+getEdges(G)->
+  B=digraph:edges(G),
+  [digraph:edge(G,E) || E <- B].
 
 get_in_edges(G, Node) -> digraph:in_edges(G,Node#neuron.id).
 get_out_edges(G, Node) -> digraph:out_edges(G,Node#neuron.id).
