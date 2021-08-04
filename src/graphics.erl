@@ -25,9 +25,10 @@
 all(Name,G)->
     Pipes = generate_pipes(5),
     start(Pipes),
+    plot_graph:to_file(G,"test.png","png"),
     neuralNetwork:start(Name,{self()}),
-    G_mutated = genotype:mutator(G,3),
-    gen_statem:cast(Name,{start_simulation,self(),G_mutated,Pipes}).
+    gen_statem:cast(Name,{start_simulation,self(),G,Pipes}).
+
 start(Pipes) ->
     wx_object:start({local,?SERVER},?MODULE,[Pipes],[]).
 
