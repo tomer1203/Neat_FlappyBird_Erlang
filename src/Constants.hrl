@@ -80,8 +80,8 @@
 
 %% GRAPHICS RECORDS %%
 -record(graphics_state, {
-  frame, panel, dc, paint, list,
-  simulation,collide = false,time = 0, base_state, bird_list = queue:new(), pipes_state, current_bird_state = #bird_graphics_rec{},
+  frame, panel, dc, paint,
+  time = 0, collide = false, base_state, bird_queue = queue:new(), pipes_state, current_bird_list = [],
   bmpRMap,bmpB1Map,bmpB2Map,bmpB3Map,bmpB4Map,bmpPipeMap,bmpBaseMap}).
 -record(base_state,{
   x1 = 0,
@@ -100,7 +100,7 @@
   sensorsPIDs,
   simulation,
   sub2graphics = false,
-  require_mutation
+  require_mutation = false
 }).
 -record(neuron, {type,id=erlang:unique_integer(),layer,af=sin,bias=rand:uniform()}).
 -record(neuron_data,{

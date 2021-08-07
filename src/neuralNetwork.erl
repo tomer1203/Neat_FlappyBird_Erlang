@@ -13,7 +13,7 @@
 -include("Constants.hrl").
 
 %% API
--export([start_link/0,start/2,idle/3,simulation/3, evaluation/3]).
+-export([start_link/2,start/2,idle/3,simulation/3, evaluation/3]).
 
 %% gen_statem callbacks
 -export([init/1, format_status/2, state_name/3, handle_event/4, terminate/3,
@@ -27,8 +27,8 @@
 %% @doc Creates a gen_statem process which calls Module:init/1 to
 %% initialize. To ensure a synchronized start-up procedure, this
 %% function does not return until Module:init/1 has returned.
-start_link() ->
-  gen_statem:start_link({local, ?SERVER}, ?MODULE, [], []).
+start_link(Name,PC_PID) ->
+  gen_statem:start_link({local, Name}, ?MODULE, [PC_PID], []).
 start(Name,PC_PID) ->
   gen_statem:start({local,Name}, ?MODULE, [PC_PID], []).
 
@@ -41,6 +41,7 @@ start(Name,PC_PID) ->
 %% gen_statem:start_link/[3,4], this function is called by the new
 %% process to initialize.
 init([PC_PID]) ->PC_PID!"reached the init",
+  %io:format("created new neural network!~n"),
   {ok, idle, #nn_state{pcPID = PC_PID}}.
 
 %% @private
@@ -66,12 +67,14 @@ state_name(_EventType, _EventContent, State = #nn_state{}) ->
   NextStateName = next_state,
   {next_state, NextStateName, State}.
 
-idle(cast,{start_simulation,Pc_PID,Genotype,Pipe_list},State) when Pc_PID =:=State#nn_state.pcPID ->
+idle(cast,{start_simulation,Pc_PID,Genotype,Pipe_list,Sub2graph},State) when Pc_PID =:=State#nn_state.pcPID ->
   %TODO- mutator.
   State#nn_state.pcPID!"reached idle",
 
   if
-    State#nn_state.require_mutation =:= true -> genotype:mutator(Genotype,?NUMBER_OF_MUTATION);
+    State#nn_state.require_mutation =:= true ->
+      genotype:mutator(Genotype,?NUMBER_OF_MUTATION);
+      %TODO- send to pc the new genotype .
     true                                     -> ok
   end,
   io:format("hello world!~n"),
@@ -80,8 +83,8 @@ idle(cast,{start_simulation,Pc_PID,Genotype,Pipe_list},State) when Pc_PID =:=Sta
 
   Me = self(),
   Actuator_PID=spawn(fun()->construct_network(Genotype,Me)end),
-  %TODO- send to pc the new genotype.
-  New_stat=State#nn_state{pipList = Pipe_list,genotype = Genotype,actuatorPID=Actuator_PID},
+
+  New_stat=State#nn_state{pipList = Pipe_list,genotype = Genotype,actuatorPID=Actuator_PID,sub2graphics = Sub2graph},
   {keep_state, New_stat};
 
 idle(info,{finished_constructing, ActuatorPid, SensorsPIDs},State) when ActuatorPid =:= State#nn_state.actuatorPID ->
@@ -100,21 +103,21 @@ simulation(info,{neuron_send, ActuatorPid, Value},State) when ActuatorPid =:= St
     Value>0.5 -> true;
     true      -> false
   end,
-  io:format("Jump Value= ~p~n",[Value]),
+  %io:format("Jump Value= ~p~n",[Value]),
   % simulate a frame
   {Collide,Bird_graphics,New_simulation_state} = simulation:simulate_a_frame(State#nn_state.simulation,Jump),
   NewState = State#nn_state{simulation = New_simulation_state},
 
   % send the current frame to graphics(only if you are subscribed to him)
   if
-    State#nn_state.sub2graphics =:= true -> graphics!{bird_update,self(),{Collide,Bird_graphics}};
+    State#nn_state.sub2graphics =:= true -> graphics_proxy!{bird_update,self(),New_simulation_state#sim_state.total_time,{Collide,Bird_graphics}};
     true                                 -> ok
   end,
 
   case Collide of
     false -> % if survived
       Features = simulation:feature_extraction(New_simulation_state),
-      io:format("sensor inputs= ~p~n",[Features]),
+      %io:format("sensor inputs= ~p~n",[Features]),
       send_to_sensors(Features, State#nn_state.sensorsPIDs),
       {keep_state,NewState};
     true-> % if died
@@ -129,10 +132,10 @@ evaluation(cast,{kill,PcPID},State) when PcPID =:= State#nn_state.pcPID ->
   New_state=State#nn_state{require_mutation =true},
   NextStateName = idle,
   {next_state, NextStateName, New_state};
-evaluation(cast,{keep,PcPID,Pipe_list},State) when PcPID =:= State#nn_state.pcPID ->
+evaluation(cast,{keep,PcPID,Pipe_list,Sub2graph},State) when PcPID =:= State#nn_state.pcPID ->
   NextStateName = simulation,
   Simulation = simulation:initiate_simulation(Pipe_list),
-  New_stat =State#nn_state{simulation = Simulation, pipList =Pipe_list},
+  New_stat =State#nn_state{simulation = Simulation, pipList =Pipe_list,sub2graphics = Sub2graph},
   {next_state, NextStateName, New_stat}.
 
 

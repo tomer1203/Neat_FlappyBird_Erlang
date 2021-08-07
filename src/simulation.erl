@@ -10,7 +10,7 @@
 -author("tomer").
 
 %% API
--export([simulate_a_frame/2,feature_extraction/1,initiate_simulation/1,simulate_pipes/1,test/0]).
+-export([simulate_a_frame/2,feature_extraction/1,initiate_simulation/1,simulate_pipes/1,generate_pipes/1,test/0]).
 -include("Constants.hrl").
 %  <- y==0                    |       |
 %                             |       |
@@ -211,3 +211,8 @@ world_collision_detection(Bird)->
     true->true;
     false-> false
   end.
+
+generate_pipes(N)->generate_pipes(N,[]).
+generate_pipes(0,Acc)->Acc;
+generate_pipes(N,Acc)->Height = rand:uniform(?PIPE_MAX_HEIGHT-?PIPE_MIN_DISTANCE_FROM_EDGES)+?PIPE_MIN_DISTANCE_FROM_EDGES,
+  generate_pipes(N-1,[#pipe_rec{height = Height,x = ?BG_WIDTH-?PIPE_WIDTH,passed = false}|Acc]).

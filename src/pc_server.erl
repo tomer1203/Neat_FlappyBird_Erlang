@@ -54,7 +54,7 @@ init([Pc_num,Learning_pid,Number_of_networks,Num_Layers,Num_Neurons_Per_Layer]) 
   %ets:insert(tableEx9, {K,V})
   Gen_ets = ets:new(gen_ets,[set]),
   Fitness_ets = ets:new(fitness_ets,[set]),
-  [ets:insert(gen_ets,{Pid,Graph})||{Pid,Graph}<-Networks],
+  [ets:insert(Gen_ets,{Pid,Graph})||{Pid,Graph}<-Networks],
 
   {ok, #pc_server_state{pc_num = Pc_num, learning_pid = Learning_pid,
     number_of_networks = Number_of_networks,gen_ets = Gen_ets,
@@ -80,25 +80,25 @@ handle_call(_Request, _From, State = #pc_server_state{}) ->
   {noreply, NewState :: #pc_server_state{}, timeout() | hibernate} |
   {stop, Reason :: term(), NewState :: #pc_server_state{}}).
 
-handle_cast({start_simulation,From,Pipe_list}, State = #pc_server_state{})when From =:= State#pc_server_state.learning_pid->
-  First_key = ets:first(gen_ets),
-  start_networks(First_key,Pipe_list),
+handle_cast({start_simulation,From,Pipe_list}, State = #pc_server_state{gen_ets = Gen_ets})when From =:= State#pc_server_state.learning_pid->
+  First_key = ets:first(Gen_ets),
+  start_networks(First_key,Pipe_list,Gen_ets),
   {noreply, State};
 
 % A message from one of the neural networks to the Pc updating it how the simulation went
 handle_cast({finished_simulation,From,Time}, State = #pc_server_state{remaining_networks = 0})->
   exit("Pc exiting received too many finished simulation messages");
-handle_cast({finished_simulation,From,Time}, State = #pc_server_state{remaining_networks = 1})->
-  ets:insert(fitness_ets,{From,Time}),
+handle_cast({finished_simulation,From,Time}, State = #pc_server_state{remaining_networks = 1,fitness_ets = Fitness_ets})->
+  ets:insert(Fitness_ets,{From,Time}),
   %TODO: Send fitness scores to learning fsm(either through messages or through ets)
   {noreply, State#pc_server_state{remaining_networks = 0}};
-handle_cast({finished_simulation,From,Time}, State = #pc_server_state{remaining_networks = Remaining_networks})->
-  ets:insert(fitness_ets,{From,Time}),
+handle_cast({finished_simulation,From,Time}, State = #pc_server_state{remaining_networks = Remaining_networks,fitness_ets = Fitness_ets})->
+  ets:insert(Fitness_ets,{From,Time}),
   {noreply, State#pc_server_state{remaining_networks = Remaining_networks-1}};
 
-handle_cast({network_feedback,From,PipeList,KeepList}, State = #pc_server_state{})when From =:= State#pc_server_state.learning_pid->
+handle_cast({network_feedback,From,PipeList,KeepList}, State = #pc_server_state{gen_ets = Gen_ets})when From =:= State#pc_server_state.learning_pid->
   % get list of all available networks(the ones that were killed), a list of the networks to keep and a list of the genotypes to mutate
-  {KeepList,KillList,MutateList}=parseKeepList(KeepList),
+  {KeepList,KillList,MutateList}=parseKeepList(Gen_ets,KeepList),
   % send a keep message to all the keep networks
   [gen_statem:cast(NetworkPid,{keep,self(),PipeList,Subscribe})||{NetworkPid,Subscribe}<-KeepList],
   % send a kill message to all the kill networks
@@ -108,8 +108,6 @@ handle_cast({network_feedback,From,PipeList,KeepList}, State = #pc_server_state{
 
 handle_cast(_Request, State = #pc_server_state{}) ->
   {noreply, State}.
-
-
 
 %% @private
 %% @doc Handling all non call/cast messages
@@ -164,30 +162,32 @@ nn_monitor(Proc) ->
   end.
 
 % opens up the networks
-start_networks('$end_of_table',_Pipes)->ok;
-start_networks(Key,Pipes)->
-  G=ets:lookup(gen_ets,Key),
-  gen_statem:cast(Key,{start_simulation,self(),G,Pipes}),
-  Next_key = ets:next(gen_ets,Key),
-  start_networks(Next_key,Pipes).
+start_networks('$end_of_table',_Pipes,_Gen_ets)->ok;
+start_networks(Key,Pipes,Gen_ets)->
+  [{Key,G}]=ets:lookup(Gen_ets,Key),
+  % TODO: last value is sub2 graphics! this needs to change to false eventually and it is currently true for debugging
+  gen_statem:cast(Key,{start_simulation,self(),G,Pipes,true}),
+  Next_key = ets:next(Gen_ets,Key),
+  start_networks(Next_key,Pipes,Gen_ets).
 
-get_nn_name(Pc_num,N)->lists:append("nn_",integer_to_list(Pc_num*100+N)).
+get_nn_name(Pc_num,N)->list_to_atom(lists:append("nn_",integer_to_list(Pc_num*100+N))).
 %put_and_send(G,PID,Map,Pipe_list) ->ok.
 
 % turn the keep list into a list of the networks to kill the networks to keep and which genotypes
 % to mutate and how many times. the sum of the mutate list should be equal to the dead networks.
-parseKeepList(KeepList)->parseKeepList(KeepList,[],[],[]).
-parseKeepList([],KeepAcc,KillAcc,MutateAcc)->{KeepAcc,KillAcc,MutateAcc};
-parseKeepList([{NetworkPid,Keep,Subscribe}|KeepList],KeepAcc,KillAcc,MutateAcc)->
+parseKeepList(Gen_ets,KeepList)->parseKeepList(Gen_ets,KeepList,[],[],[]).
+parseKeepList(_Gen_ets,[],KeepAcc,KillAcc,MutateAcc)->{KeepAcc,KillAcc,MutateAcc};
+parseKeepList(Gen_ets,[{NetworkPid,Keep,Subscribe}|KeepList],KeepAcc,KillAcc,MutateAcc)->
   case Keep of
     0 -> % kill network
-      parseKeepList(KeepList,KeepAcc,[NetworkPid|KillAcc],MutateAcc);
+      parseKeepList(Gen_ets,KeepList,KeepAcc,[NetworkPid|KillAcc],MutateAcc);
     1 -> % keep but don't mutate
-      parseKeepList(KeepList,[{NetworkPid,Subscribe}|KeepAcc],KillAcc,MutateAcc);
+      parseKeepList(Gen_ets,KeepList,[{NetworkPid,Subscribe}|KeepAcc],KillAcc,MutateAcc);
     N -> % keep and mutate N times
-      Gen = ets:lookup(gen_ets,NetworkPid),
-      parseKeepList(KeepList,[{NetworkPid,Subscribe}|KeepAcc],KillAcc,[{Gen,N},MutateAcc])
+      [{Key,Gen}] = ets:lookup(Gen_ets,NetworkPid),
+      parseKeepList(Gen_ets,KeepList,[{NetworkPid,Subscribe}|KeepAcc],KillAcc,[{Gen,N},MutateAcc])
   end.
+
 mutate_and_restart_networks([],[],PipeList)->ok;
 mutate_and_restart_networks(KillList,[{Gen,0}|MutateList],PipeList)->mutate_and_restart_networks(KillList,MutateList,PipeList);
 mutate_and_restart_networks([],MutateList,PipeList)->exit("there are more mutations than networks to put them in");
@@ -197,5 +197,9 @@ mutate_and_restart_networks([NetworkPid|KillList],[{Gen,N}|MutateList],PipeList)
   mutate_and_restart_networks(KillList,[{Gen,N-1}|MutateList],PipeList),
 
   ok.
-%TODO how can we mutate a network but still keep a copy of the original the same?
-assignGenToNetwork(NetworkPid,Gen,PipeList)->ok.
+% TODO: UPDATE GEN ETS
+% TODO: how can we mutate a network but still keep a copy of the original the same?
+assignGenToNetwork(NetworkPid,Gen,PipeList)->
+  % Copy gen
+  % send start simulation message
+  ok.

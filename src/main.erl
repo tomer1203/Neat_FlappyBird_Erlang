@@ -10,12 +10,12 @@
 -author("Omri, Tomer").
 
 %% API
--export([test/1,loop/1]).
+-export([test/1,test2/1,loop/1]).
 test(Name)->
-  %Pipes = graphics:generate_pipes(5),
+  %Pipes = simulation:generate_pipes(5),
   %graphics:start(Pipes),
   %neuralNetwork:start(Name,{self()}),
-  G = genotype:test_Genotype(2,2),
+  G = genotype:test_Genotype(10,10),
 %%  E = graph_visualization:getEdgesList(G),
 %%  V = graph_visualization:getVerticesList(G),
     plot_graph:to_file( G ,Name, "png").
@@ -24,3 +24,9 @@ test(Name)->
 loop(N)->
   io:format("~p~n",[N]),
   loop(N+1).
+test2(C)->
+  N = 1000,
+  Pipes = simulation:generate_pipes(10),
+  graphics:start(Pipes,N),
+  pc_server:start(pc1,C,self(),N,2,2),
+  gen_server:cast(pc1,{start_simulation,self(),Pipes}).
