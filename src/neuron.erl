@@ -40,7 +40,7 @@ loop(State = #neuron_data{})->
       % check if From is A valid input source
       In_Pids_Map = State#neuron_data.remaining_in_pids,
       case maps:is_key(From,In_Pids_Map) of
-        false->erlang:error("unautherized sender");
+        false->erlang:error(lists:flatten(io_lib:format("unautherized sender:~nFrom-~p~nIn_neighbuors~p~nstate~p~n", [From,In_Pids_Map,State])));
         true->ok
       end,
       % Add The data into the accumulation

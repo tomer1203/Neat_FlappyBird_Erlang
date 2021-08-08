@@ -13,7 +13,7 @@
 
 %% API
 -export([construct_Genotype/3,get_sensors/1,get_actuator/1,get_layer/2,test_Genotype/2,
-  get_layer/1,rand_neutron/1,get_nodes/1,getEdges/1,mutator/2]).
+  get_layer/1,get_label/2,rand_neutron/1,get_nodes/1,getEdges/1,mutator/2,remove_node/2]).
 
 %for test only
 test_Genotype(NumOfLayers,NumOfNeurons) ->
@@ -86,7 +86,20 @@ set_edge_weight(G,Edge,NewWeight) -> {E,Node1ID,Node2ID,_}= digraph:edge(G,Edge)
 % set add a  number to weight for exist edge (['$e' | N])
 mod_edge_weight(G,Edge,NewWeight ) -> {E,Node1ID,Node2ID,Weight}= digraph:edge(G,Edge) ,digraph: add_edge(G,E,Node1ID,Node2ID,NewWeight+Weight).
 %add edge form X to Y whit random weight.
-add_edge(G,X,Y)->digraph:add_edge(G,X#neuron.id,Y#neuron.id,rand:uniform()).
+add_edge(G,X,Y)->X_neighbours=digraph:out_neighbours(G,X#neuron.id),
+  Cond=[ID||ID<-X_neighbours,Y#neuron.id=:=ID],
+  case Cond of
+    []->digraph:add_edge(G,X#neuron.id,Y#neuron.id,rand:uniform());
+    _->already_neighbours
+end.
+add_edge_rand_out(G,N)->io:format("get:~p~n",[N]),
+  Nodes_from = get_layers_from(G,N#neuron.layer),
+  Rand_node_output=rand_element(Nodes_from),
+  add_edge(G,N,Rand_node_output).
+add_edge_rand_in(G,N)->
+  Nodes_until = get_layers_until(G,N#neuron.layer),
+  Rand_node_input=rand_element(Nodes_until),
+  add_edge(G,Rand_node_input,N).
 
 getEdges(G)->
   B=digraph:edges(G),
@@ -97,14 +110,28 @@ get_out_edges(G, Node) -> digraph:out_edges(G,Node#neuron.id).
 % delete a Node form the graph and update the layer in the graph.
 remove_node(G,N) ->
   Layer = get_layer(N),
+  NeighboursIn=digraph:in_neighbours(G,N#neuron.id),
+  NeighboursOut=digraph:out_neighbours(G,N#neuron.id),
+  [add_edge_rand_out(G,get_label(G,Nei))||Nei <- NeighboursIn],
   digraph:del_vertex(G,N#neuron.id),
   NodeInLayer =get_layer(G,Layer),
+  io:format("noods~p,remove!!~p",[NodeInLayer,N#neuron.id]),
   if
-    NodeInLayer =:= [] -> update_layer_remove(G,Layer+1);
+    NodeInLayer =:= [] -> io:format("update!~p",[NodeInLayer]),update_layer_remove(G,Layer+1);
     true -> ok
-  end.
+  end,
+  [add_edge_rand_in(G,get_label(G,NeiOut))||NeiOut <- NeighboursOut,digraph:in_neighbours(G,NeiOut) =:=[]].
 
-remove_edge(G,E) -> digraph:del_edge(G,E).
+remove_edge(G,E) ->
+  {_,NID1,NID2,_} = digraph:edge(G,E),
+  N1out=digraph:out_neighbours(G,NID1),
+  N2in=digraph:in_neighbours(G,NID2),
+  NumOfNeighbours1=length(N1out),
+  NumOfNeighbours2=length(N2in),
+  if
+    ((NumOfNeighbours1>1) and (NumOfNeighbours2>1)) -> digraph:del_edge(G,E);
+    true -> ok
+  end .
 % after remove a node update all layer index that is larger then L in graph G. (Layer L is empty)
 update_layer_remove(G,L) ->
   [Actuator] =get_actuator(G),
@@ -121,7 +148,7 @@ update_layer_remove(G,L,N) ->
 update_layer_add(G,L) ->
   [Actuator] =get_actuator(G),
   N=Actuator#neuron.layer,
-  update_layer_remove(G,L,N).
+  update_layer_add(G,L,N).
 update_layer_add(G,N,N) ->
   NodesInLayer = get_layer(G,N),
   [set_node(G,Node#neuron{layer = N+1 })||Node<-NodesInLayer];
@@ -230,7 +257,7 @@ add_link(G) ->
   SelectedNodeA= rand_node(G),
   SelectedNodeB= rand_node(G),
   if
-    SelectedNodeA#neuron.layer < SelectedNodeB#neuron.layer -> add_edge(G,SelectedNodeA,SelectedNodeB);
+    SelectedNodeA#neuron.layer < SelectedNodeB#neuron.layer -> add_edge(G,SelectedNodeA,SelectedNodeB); %TODO- check if the edge is already exist!!!
     SelectedNodeB#neuron.layer < SelectedNodeA#neuron.layer -> add_edge(G,SelectedNodeB,SelectedNodeA);
     true -> ok
   end.
@@ -244,8 +271,6 @@ remove_neuron(G) ->
 
 
 
-
-%TODO - 6. add_neuron
 %%Create a new neuron A, giving it a unique id and positioning it in a randomly
 %%selected layer of the NN. Then give the neuron A a randomly chosen activation
 %%function. Then choose a random neuron B in the NN and connect neuron A’s
@@ -255,22 +280,23 @@ remove_neuron(G) ->
 add_neuron(G) ->
   NumOfLayers=get_num_layers(G) ,
   SelectedLayer =rand:uniform(NumOfLayers),
-  Neuron = #neuron{type = neuron,layer=SelectedLayer, af=rand_af()},
-  set_node(G,Neuron),
+  Neuron = #neuron{type = neuron,layer=SelectedLayer, af=rand_af(),bias = rand:uniform()},
   Nodes_until = get_layers_until(G,SelectedLayer),
   Rand_node_input=rand_element(Nodes_until),
-  add_edge(G,Rand_node_input,Neuron),
   if
     SelectedLayer =:= NumOfLayers ->
-      update_layer_add(G,NumOfLayers),
+      update_layer_add(G,SelectedLayer),
+      set_node(G,Neuron),
       [Actuator]=get_actuator(G),
       add_edge(G,Neuron,Actuator);  %update the actuator layer, new layer is added
     true ->
-      Nodes_from = get_layers_from(G,SelectedLayer),
-      Rand_node_output=rand_element(Nodes_from),
-      add_edge(G,Neuron,Rand_node_output)
-  end
-.
+      set_node(G,Neuron),
+      add_edge_rand_out(G,Neuron)
+%%      Nodes_from = get_layers_from(G,SelectedLayer),
+%%      Rand_node_output=rand_element(Nodes_from),
+%%      add_edge(G,Neuron,Rand_node_output)
+  end,
+  add_edge(G,Rand_node_input,Neuron).
 %TODO- need to select NodeA and NodeB and copy edge.
 
 %%remove_inlink:
@@ -300,7 +326,7 @@ remove_outlink(G) ->
   end.
 
 mutator(_,0) -> ok;
-mutator(G,N) -> Index= rand:uniform(8),
+mutator(G,N) -> Index= rand:uniform(9),
   case Index of
     1 -> add_bias(G);
     2 -> remove_bias(G);
@@ -309,8 +335,8 @@ mutator(G,N) -> Index= rand:uniform(8),
     5 -> remove_neuron(G);
     6 -> add_link(G);
     7 -> remove_inlink(G);
-    8 -> remove_outlink(G)
-    %9 -> add_neuron(G)
+    8 -> remove_outlink(G);
+    9 -> add_neuron(G)
   end,
   mutator(G,N-1).
 
