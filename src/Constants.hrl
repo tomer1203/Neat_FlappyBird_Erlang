@@ -44,7 +44,7 @@
 -define(BIRD_RADIUS,26).% averaged width and height to 26
 
 % Genotype Constants %
--define(ACTIVATION_FUNCTION_LIST,[gaussian, tanh, cos, sin, sign, bin, trinary, multiquadric, absolute, linear, quadratic, gaussian, sqrt, log, sigmoid, avg, std, gaussian]).
+-define(ACTIVATION_FUNCTION_LIST,[gaussian, tanh, cos, sin, sign, bin, trinary, multiquadric, absolute, linear, quadratic, gaussian, sqrt, log, sigmoid]).
 -define(NUMBER_OF_MUTATION, 3).
 
 %% SIMULATION RECORDS %%
