@@ -10,7 +10,7 @@
 -author("tomer").
 
 %% API
--export([simulate_a_frame/2,feature_extraction/1,initiate_simulation/1,simulate_pipes/1,test/0]).
+-export([simulate_a_frame/2,feature_extraction/1,initiate_simulation/1,simulate_pipes/1,generate_pipes/1,test/0]).
 -include("Constants.hrl").
 %  <- y==0                    |       |
 %                             |       |
@@ -158,7 +158,7 @@ simulate_a_frame(Simulation_State = #sim_state{},Jump)->
   end,
   % return if collided and new sim state
   Bird_graphics = #bird_graphics_rec{y = Moved_bird#bird_rec.y,angle = Moved_bird#bird_rec.angle},
-  New_simulation_state = #sim_state{tick_time = Tick_time, bird = Moved_bird, visible_pipeList = New_visible_pipeList, extra_pipeList = RES, used_pipeList = New_Used_pipes},
+  New_simulation_state = #sim_state{total_time = Simulation_State#sim_state.total_time+1, tick_time = Tick_time, bird = Moved_bird, visible_pipeList = New_visible_pipeList, extra_pipeList = RES, used_pipeList = New_Used_pipes},
  {Collide,Bird_graphics,New_simulation_state}.
 
 bird_move(Bird,Jump,Tick_time)->
@@ -211,3 +211,8 @@ world_collision_detection(Bird)->
     true->true;
     false-> false
   end.
+
+generate_pipes(N)->generate_pipes(N,[]).
+generate_pipes(0,Acc)->Acc;
+generate_pipes(N,Acc)->Height = rand:uniform(?PIPE_MAX_HEIGHT-?PIPE_MIN_DISTANCE_FROM_EDGES)+?PIPE_MIN_DISTANCE_FROM_EDGES,
+  generate_pipes(N-1,[#pipe_rec{height = Height,x = ?BG_WIDTH-?PIPE_WIDTH,passed = false}|Acc]).

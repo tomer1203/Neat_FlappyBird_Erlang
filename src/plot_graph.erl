@@ -1,5 +1,5 @@
 %%%-------------------------------------------------------------------
-%%% @author hananel assor, dor avni
+%%% @author Omri gil and Tomer Shaked
 %%% @copyright (C) 2020, <COMPANY>
 %%% @doc
 %%%
@@ -7,7 +7,7 @@
 %%% Created : 03. Oct 2020 15:55
 %%%-------------------------------------------------------------------
 -module(plot_graph).
--author("chass").
+-author("Omri, Tomer").
 
 %% API
 -export([ to_dot/2,to_file/3]).

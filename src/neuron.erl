@@ -1,5 +1,5 @@
 %%%-------------------------------------------------------------------
-%%% @author tomer
+%%% @author Omri, Tomer
 %%% @copyright (C) 2021, <COMPANY>
 %%% @doc
 %%%
@@ -7,7 +7,9 @@
 %%% Created : 20. Jul 2021 15:29
 %%%-------------------------------------------------------------------
 -module(neuron).
--author("tomer").
+-author("Omri, Tomer").
+
+
 
 %% API
 -export([init/0,loop/1,test/0]).
@@ -60,6 +62,7 @@ loop(State = #neuron_data{})->
         _ ->
           loop(State#neuron_data{acc = Acc,remaining_in_pids = Reduced_in_pids})
       end;
+    {kill,From}->exit("normal");%TODO: check if this one works(this might not close all the other process since the reason is normal
     M ->
       erlang:error(lists:flatten(io_lib:format("Invalid Message: ~p", [M])))
   end.
