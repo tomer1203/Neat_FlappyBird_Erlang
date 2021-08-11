@@ -27,6 +27,6 @@ loop(N)->
 test2(C)->
   N = 1000,
   Pipes = simulation:generate_pipes(10),
-  graphics:start(Pipes,N),
+  graphics:start(N),
   pc_server:start(pc1,C,self(),N,2,2),
   gen_server:cast(pc1,{start_simulation,self(),Pipes}).

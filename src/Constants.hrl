@@ -30,7 +30,7 @@
 -define(GRAVITY,4). % 3
 -define(PIPE_MIN_DISTANCE_FROM_EDGES,50).
 -define(PIPE_MAX_HEIGHT,?BG_HEIGHT-?BASE_HEIGHT-?PIPE_GAP-?PIPE_MIN_DISTANCE_FROM_EDGES).
-
+-define(NUMBER_OF_PIPES,10).
 
 % Graphics Constants %
 -define(BG_WIDTH,564).%288
@@ -46,6 +46,8 @@
 % Genotype Constants %
 -define(ACTIVATION_FUNCTION_LIST,[gaussian, tanh, cos, sin, sign, bin, trinary, multiquadric, absolute, linear, quadratic, gaussian, sqrt, log, sigmoid]).
 -define(NUMBER_OF_MUTATION, 3).
+
+-define(NUMBER_OF_SUBSCRIBED_BIRDS,100).
 
 %% SIMULATION RECORDS %%
 -record(pipe_rec,{height,x,passed}).
@@ -81,6 +83,7 @@
 %% GRAPHICS RECORDS %%
 -record(graphics_state, {
   frame, panel, dc, paint,
+  pc_list, %TODO: maybe change this to a constant list or something
   time = 0, collide = false, base_state, bird_queue = queue:new(), pipes_state, current_bird_list = [],
   bmpRMap,bmpB1Map,bmpB2Map,bmpB3Map,bmpB4Map,bmpPipeMap,bmpBaseMap}).
 -record(base_state,{
