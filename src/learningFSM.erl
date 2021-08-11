@@ -64,7 +64,7 @@ handle_call(_Request, _From, State = #lerningFSM_state{}) ->
   {noreply, NewState :: #lerningFSM_state{}, timeout() | hibernate} |
   {stop, Reason :: term(), NewState :: #lerningFSM_state{}}).
 handle_cast({network_evaluation,PC_PID,Fitness_list}, State = #lerningFSM_state{}) ->
-  Top=top_genotypes(Fitness_list),gen_server:cast(PC_PID,{network_feedback,self(),Top}),{noreply, State};
+  Keep_kill_List=top_genotypes(Fitness_list),gen_server:cast(PC_PID,{network_feedback,self(),Keep_kill_List}),{noreply, State};
 
 handle_cast(_Request, State = #lerningFSM_state{}) ->
   {noreply, State}.
@@ -100,8 +100,9 @@ code_change(_OldVsn, State = #lerningFSM_state{}, _Extra) ->
 %%% Internal functions
 %%%===================================================================
 
-
+% sort from worst to the best
 top_genotypes(FitList)->
-  SortedFitList=lists:sort(fun({KeyA,ValA}, {KeyB,ValB}) -> {ValA,KeyA} >= {ValB,KeyB} end, FitList),Top_fit=top_fit(SortedFitList,length(SortedFitList)).
-top_fit(T,25)->T;
-top_fit([_|T],N)-> top_fit(T,N-1).
+  SortedFitList=lists:sort(fun({KeyA,ValA}, {KeyB,ValB}) -> {ValA,KeyA} >= {ValB,KeyB} end, FitList),make_keep_kill_List(SortedFitList,length(SortedFitList),[]).
+make_keep_kill_List(_ ,0 ,List) -> List;
+make_keep_kill_List([{PID,_}|T], N ,List) when N < 75 -> make_keep_kill_List(T, N-1 ,List +[{PID,0,false}]);
+make_keep_kill_List([{PID,_}|T], N ,List) when N >= 75 -> make_keep_kill_List(T, N-1 ,List +[{PID,4,true}]).
