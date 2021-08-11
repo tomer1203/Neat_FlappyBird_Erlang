@@ -332,7 +332,8 @@ mutator(G,N) -> Index= rand:uniform(9),
     2 -> remove_bias(G);
     3 -> mutate_weights(G);
     4 -> mutate_af(G);
-    5 -> remove_neuron(G);
+    5 -> mutate_af(G);
+    %5 -> remove_neuron(G);
     6 -> add_link(G);
     7 -> remove_inlink(G);
     8 -> remove_outlink(G);
