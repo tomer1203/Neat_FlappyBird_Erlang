@@ -67,8 +67,8 @@ init([Pipes,PC_list]) ->
     erlang:send_after(?Timer, self(), timer),
 
     wxPanel:connect(Panel, paint, [callback]),
-    wxPanel:connect (Panel, left_down),
-    wxPanel:connect (Panel, right_down),
+%%    wxPanel:connect (Panel, left_down),
+%%    wxPanel:connect (Panel, right_down),
     wxFrame:connect(Frame, close_window),
     wxButton:connect(Button, command_button_clicked, [{callback, fun handle_click/2}]),
     wxButton:connect(Button2, command_button_clicked, [{callback, fun handle_click2/2}]),
@@ -259,7 +259,7 @@ graphics_reduce(Bird_list,Frame_number,0,Next_N)->
         0 -> io:format("All birds Dead waiting for next generation~n"),
             wx_object:cast(graphics,{new_generation}),
             receive
-                {new_generation,New_N}->graphics_reduce([],1,New_N,New_N)
+                {new_generation,New_N}->io:format("restarting graphics~n"), graphics_reduce([],1,New_N,New_N)
             end;
         N -> graphics_reduce([],Frame_number+1,N,N)
     end;

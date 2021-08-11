@@ -97,7 +97,7 @@ handle_cast({finished_simulation,From,Time}, State = #pc_server_state{remaining_
   {noreply, State#pc_server_state{remaining_networks = 0}};
 handle_cast({finished_simulation,From,Time}, State = #pc_server_state{remaining_networks = Remaining_networks,fitness_ets = Fitness_ets})->
   ets:insert(Fitness_ets,{From,Time}),
-  io:format("remaining networks ~p~n number of networks~p~n",[Remaining_networks,State#pc_server_state.number_of_networks]),
+  %io:format("remaining networks ~p~n number of networks~p~n",[Remaining_networks,State#pc_server_state.number_of_networks]),
   {noreply, State#pc_server_state{remaining_networks = Remaining_networks-1}};
 % from learning fsm
 handle_cast({network_feedback,From,TopGens}, State = #pc_server_state{gen_ets = Gen_ets})when From =:= State#pc_server_state.learning_pid->
@@ -114,14 +114,15 @@ handle_cast({network_feedback,From,TopGens}, State = #pc_server_state{gen_ets = 
 
 % from graphics
 handle_cast({run_generation,From, Pipe_list}, State)->
-  {KeepList,KillList,MutateList}=State#pc_server_state.keep_list,
+
   io:format("got feedback from graphics~p~n",[State#pc_server_state.number_of_networks]),
   case State#pc_server_state.generation of
       mutation->
-      sendKeepAndKillMessage(KeepList,KillList,Pipe_list,State#pc_server_state.gen_ets),
+        {KeepList,KillList,MutateList}=State#pc_server_state.keep_list,
+        sendKeepAndKillMessage(KeepList,KillList,Pipe_list,State#pc_server_state.gen_ets),
         %io:format("sending to mutate and restart: kill list= ~p~nMutateList=~p~n",[length(KillList),length(MutateList)]),
-      mutate_and_restart_networks(KillList,MutateList,State#pc_server_state.gen_ets,Pipe_list),
-      NewState=State#pc_server_state{generation=wait,remaining_networks = State#pc_server_state.number_of_networks};
+        mutate_and_restart_networks(KillList,MutateList,State#pc_server_state.gen_ets,Pipe_list),
+        NewState=State#pc_server_state{generation=wait,remaining_networks = State#pc_server_state.number_of_networks};
       _ -> NewState=State#pc_server_state{generation=graphics, pipe_list = Pipe_list,remaining_networks = State#pc_server_state.number_of_networks}
   end,{noreply, NewState};
 
