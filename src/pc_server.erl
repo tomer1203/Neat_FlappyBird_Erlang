@@ -22,7 +22,7 @@
 
 -define(SERVER, ?MODULE).
 
--record(pc_server_state, {pc_num,number_of_networks,gen_ets,fitness_ets, remaining_networks, learning_pid}).
+-record(pc_server_state, {pc_num,number_of_networks,gen_ets,fitness_ets, remaining_networks, learning_pid, generation=wait, pip_list, keep_list}).
 
 %%%===================================================================
 %%% API
@@ -96,15 +96,26 @@ handle_cast({finished_simulation,From,Time}, State = #pc_server_state{remaining_
   ets:insert(Fitness_ets,{From,Time}),
   {noreply, State#pc_server_state{remaining_networks = Remaining_networks-1}};
 
-handle_cast({network_feedback,From,PipeList,KeepList}, State = #pc_server_state{gen_ets = Gen_ets})when From =:= State#pc_server_state.learning_pid->
+handle_cast({network_feedback,From,KeepList}, State = #pc_server_state{gen_ets = Gen_ets})when From =:= State#pc_server_state.learning_pid->
   % get list of all available networks(the ones that were killed), a list of the networks to keep and a list of the genotypes to mutate
   {KeepList,KillList,MutateList}=parseKeepList(Gen_ets,KeepList),
-  % send a keep message to all the keep networks
-  [gen_statem:cast(NetworkPid,{keep,self(),PipeList,Subscribe})||{NetworkPid,Subscribe}<-KeepList],
-  % send a kill message to all the kill networks
-  [gen_statem:cast(NetworkPid,{kill,self()})||NetworkPid<-KillList],
-  % for every genotype in the mutate list pass it to one of the dead networks
-  mutate_and_restart_networks(KillList,MutateList,PipeList);
+  case State#pc_server_state.generation of
+    graphics->
+      sendKeepAndKillMessage(KeepList,KillList,State#pc_server_state.pip_list),
+      mutate_and_restart_networks(KillList,MutateList,State#pc_server_state.pip_list),
+      NewState=State#pc_server_state{generation=wait};
+      _ -> NewState=State#pc_server_state{generation=mutation, keep_list = {KeepList,KillList,MutateList}} % TODO- function start simulation, mutate, update ets ! !
+  end,{noreply, NewState};
+
+handle_cast({run_generation,From, Pipe_list}, State) when From =:= graphics->
+  {KeepList,KillList,MutateList}=State#pc_server_state.keep_list,
+  case State#pc_server_state.generation of
+      mutation->
+      sendKeepAndKillMessage(KeepList,KillList,Pipe_list),
+      mutate_and_restart_networks(KillList,MutateList,Pipe_list),
+      NewState=State#pc_server_state{generation=wait};
+      _ -> NewState=State#pc_server_state{generation=graphics, pip_list = Pipe_list}
+  end,{noreply, NewState};
 
 handle_cast(_Request, State = #pc_server_state{}) ->
   {noreply, State}.
@@ -201,5 +212,12 @@ mutate_and_restart_networks([NetworkPid|KillList],[{Gen,N}|MutateList],PipeList)
 % TODO: how can we mutate a network but still keep a copy of the original the same?
 assignGenToNetwork(NetworkPid,Gen,PipeList)->
   % Copy gen
+  Copy_genotype = digraph_utils:subgraph(Gen,digraph:vertices(Gen)),
   % send start simulation message
+  gen_statem:cast(NetworkPid,{start_simulation,self(),Copy_genotype,PipeList,true}),
   ok.
+sendKeepAndKillMessage(KeepList,KillList,PipeList)->
+  % send a keep message to all the keep networks
+  [gen_statem:cast(NetworkPid,{keep,self(),PipeList,Subscribe})||{NetworkPid,Subscribe}<-KeepList],
+  % send a kill message to all the kill networks
+  [gen_statem:cast(NetworkPid,{kill,self()})||NetworkPid<-KillList].

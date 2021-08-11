@@ -172,7 +172,6 @@ construct_network(G,NnPID)->
   SensorsPIDs=get_sensor_PIDs(G,NewIdToPIDs),
   configure_nn(G,NewIdToPIDs),
   In_pids=get_weights_map(G,Actuator,NewIdToPIDs),
-  io:format("Actuator activation function~p~n",[Actuator#neuron.af]),
   NeuronActuator=#neuron_data{id=SelfPID,in_pids=In_pids,out_pids=[NnPID],remaining_in_pids=In_pids,bias=Actuator#neuron.bias,af=Actuator#neuron.af},
   NnPID ! {finished_constructing,SelfPID,SensorsPIDs},
   neuron:loop(NeuronActuator).
