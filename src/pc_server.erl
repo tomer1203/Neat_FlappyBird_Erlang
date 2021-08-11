@@ -96,6 +96,8 @@ handle_cast({finished_simulation,From,Time}, State = #pc_server_state{remaining_
   ets:insert(Fitness_ets,{From,Time}),
   {noreply, State#pc_server_state{remaining_networks = Remaining_networks-1}};
 
+
+% TODO: REWRITE THIS FUNCTION COMPLETLY
 handle_cast({network_feedback,From,PipeList,KeepList}, State = #pc_server_state{gen_ets = Gen_ets})when From =:= State#pc_server_state.learning_pid->
   % get list of all available networks(the ones that were killed), a list of the networks to keep and a list of the genotypes to mutate
   {KeepList,KillList,MutateList}=parseKeepList(Gen_ets,KeepList),

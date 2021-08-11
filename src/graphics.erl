@@ -13,7 +13,7 @@
 
 -include_lib("wx/include/wx.hrl").
 -include("Constants.hrl").
--export([start/2,all/1]).
+-export([start/1,all/1]).
 -export([init/1,handle_event/2,handle_sync_event/3,handle_info/2,handle_cast/2]).
 -export([graphics_reduce/1]).
 
@@ -23,25 +23,42 @@
 %%%-------------------------------------------------------------------
 all(Name)->
     Pipes = simulation:generate_pipes(5),
-    start(Pipes,1),
+    start(1),
     neuralNetwork:start(Name,self()),
     %G_mutated = genotype:mutator(G,3),
     G = genotype:test_Genotype(2,2),
     gen_statem:cast(Name,{start_simulation,self(),G,Pipes,true}).
-start(Pipes,N) ->
-    wx_object:start({local,?SERVER},?MODULE,[Pipes],[]),
+start(N) ->
+    Pipes = simulation:generate_pipes(?NUMBER_OF_PIPES),
+    wx_object:start({local,?SERVER},?MODULE,[Pipes,[pc1]],[]),
     Graphics_reduce_pid = spawn_link(graphics,graphics_reduce,[N]),
-    register(graphics_proxy,Graphics_reduce_pid).
+    register(graphics_proxy,Graphics_reduce_pid),
+    % TODO: start more than one pc
+    pc_server:start(pc1,1,self(),N,2,2),
+    gen_server:cast(pc1,{start_simulation,self(),Pipes}).
 
-init([Pipes]) ->
+init([Pipes,PC_list]) ->
     % graphics
     WxServer = wx:new(),
     Frame = wxFrame:new(WxServer, ?wxID_ANY, "FLappy Bird", [{size,{?BG_WIDTH, ?BG_HEIGHT}}]),
-    Panel  = wxPanel:new(Frame),
+    Panel  = wxPanel:new(Frame,[{size, {?BG_WIDTH, ?BG_HEIGHT}}]),
     %DC=wxPaintDC:new(Panel),
     %Paint = wxBufferedPaintDC:new(Panel),
     % create bitmap to all images
+    Button = wxButton:new(Frame, ?wxID_ANY, [{label, "Start"}]),
+    Button2 = wxButton:new(Frame, ?wxID_ANY, [{label, "finish"}]),
+    MainSizer = wxBoxSizer:new(?wxHORIZONTAL),
+
+    UiSizer = wxBoxSizer:new(?wxVERTICAL),
+    wxSizer:add(MainSizer, Panel,[{flag,?wxEXPAND}]),
+    wxSizer:add(UiSizer, Button,[{flag,?wxALL bor ?wxEXPAND},{border, 5}]),
+    wxSizer:add(UiSizer, Button2,[{flag,?wxEXPAND bor ?wxALL},{border,5}]),
+    wxSizer:add(MainSizer, UiSizer),
+
     {BmpRmap,BmpB1Map,BmpB2Map,BmpB3Map,BmpPipeMap,BmpBaseMap}=createBitMaps(),
+
+    wxWindow:setSizer(Frame, MainSizer),
+    wxSizer:setSizeHints(MainSizer, Frame),
 
     % connect panel
     wxFrame:show(Frame),
@@ -51,6 +68,8 @@ init([Pipes]) ->
     wxPanel:connect (Panel, left_down),
     wxPanel:connect (Panel, right_down),
     wxFrame:connect(Frame, close_window),
+    wxButton:connect(Button, command_button_clicked, [{callback, fun handle_click/2}]),
+    wxButton:connect(Button2, command_button_clicked, [{callback, fun handle_click2/2}]),
 
     % Generate random pipes
     [Pipe|Extras] = Pipes,
@@ -59,10 +78,20 @@ init([Pipes]) ->
     %Extras = generate_pipes(20),
     NewBase = #base_state{x1 = 0,x2 = ?BASE_WIDTH},
     %dc=DC, paint = Paint
-    {Frame,#graphics_state{frame = Frame, panel = Panel,pipes_state = #pipes_graphics_rec{visible_pipeList = [Pipe],extra_pipeList = Extras,used_pipeList = []},base_state = NewBase, bmpRMap = BmpRmap,bmpB1Map = BmpB1Map,bmpB2Map = BmpB2Map,bmpB3Map = BmpB3Map,bmpPipeMap = BmpPipeMap,bmpBaseMap = BmpBaseMap,current_bird_list = []}}.
+    {Frame,#graphics_state{
+        frame = Frame,
+        panel = Panel,
+        pc_list = PC_list,
+        pipes_state = #pipes_graphics_rec{visible_pipeList = [Pipe],extra_pipeList = Extras,used_pipeList = []},
+        base_state = NewBase,
+        bmpRMap = BmpRmap,bmpB1Map = BmpB1Map,bmpB2Map = BmpB2Map,bmpB3Map = BmpB3Map,bmpPipeMap = BmpPipeMap,bmpBaseMap = BmpBaseMap,
+        current_bird_list = []}}.
 
 %%%-------------------------------------------------------------------
-
+handle_click(#wx{obj = Button},_Event) ->
+    io:format("Start Button clicked~n").
+handle_click2(#wx{obj = Button},_Event) ->
+    io:format("Stop Button clicked~n").
 handle_event(#wx{event = #wxClose{}},State = #graphics_state {frame = Frame}) -> % close window event
     io:format("Exiting\n"),
     wxWindow:destroy(Frame),
@@ -70,12 +99,22 @@ handle_event(#wx{event = #wxClose{}},State = #graphics_state {frame = Frame}) ->
     {stop,normal,State}.
 
 
-%TODO: Complete code!
+% the locations of all birds in the last iteration
 handle_cast({bird_locations,Bird_List},State=#graphics_state{bird_queue = Bird_queue})->
     New_bird_queue = queue:in(Bird_List,Bird_queue),
     NewState = State#graphics_state{bird_queue = New_bird_queue},
-    {noreply, NewState}.
+    {noreply, NewState};
 
+handle_cast({new_generation},State=#graphics_state{})->
+    % TODO: generate new pipes
+    PipeList = simulation:generate_pipes(?NUMBER_OF_PIPES),
+    [H_pipe|T_pipes] = PipeList,
+    % TODO: restart simulation
+    NewState = State#graphics_state{pipes_state = #pipes_graphics_rec{visible_pipeList = [H_pipe],extra_pipeList = T_pipes,used_pipeList = []}},
+    graphics_proxy!{new_generation,?NUMBER_OF_SUBSCRIBED_BIRDS},
+    % TODO: send to pc an ok message
+    [gen_server:cast(PC,{run_generation,self(),PipeList})||PC<-State#graphics_state.pc_list],
+    {noreply, NewState}.
 %%handle_info({bird_update,_From,{Collide,Bird_loc}},State=#graphics_state{bird_list = BirdList})->
 %%    New_BirdList = queue:in({Collide,Bird_loc},BirdList),
 %%    NewState = State#graphics_state{bird_list = New_BirdList},
@@ -84,7 +123,6 @@ handle_cast({bird_locations,Bird_List},State=#graphics_state{bird_queue = Bird_q
 % This Is the main Loop for the graphics
 handle_info(timer, State=#graphics_state{frame = Frame,base_state = Base_location_rec,bird_queue = Bird_queue,pipes_state = Pipe_state,time = Time}) ->  % refresh screen for graphics
     wxWindow:refresh(Frame), % refresh screen
-
     %io:format("timer event~n"),
 %%    {Collide2,_, NewSimulationState2} = case Simulation#sim_state.tick_time =:= 9 of
 %%        true ->  {Collide,Graphics_Bird,NewSimulationState} = simulation:simulate_a_frame(Simulation,true),{Collide,Graphics_Bird,NewSimulationState};
@@ -93,7 +131,8 @@ handle_info(timer, State=#graphics_state{frame = Frame,base_state = Base_locatio
 %%    receive
 %%        {bird_update,_From,{_Collide3,_New_simulation_state}}->io:format("ok going~n")
 %%    end,
-    %io:format("Bird List ~p~n",[Bird_list]),
+
+%%    io:format("Bird List ~p~n",[Bird_queue]),
     case queue:is_empty(Bird_queue) of
         true ->
             NewBase  = Base_location_rec,
@@ -106,6 +145,7 @@ handle_info(timer, State=#graphics_state{frame = Frame,base_state = Base_locatio
 
     end,
     erlang:send_after(?Timer,self(),timer),
+%%    NewState = State,
     % MoveBase
 %%    NewBase = #base_state{x1 = move_base(Base_location_rec#base_state.x1) , x2 = move_base(Base_location_rec#base_state.x2)},
 %%    NewState =State#graphics_state{simulation = NewSimulationState2,collide = Collide2,time = Time+1,base_state = NewBase},
@@ -124,7 +164,6 @@ handle_sync_event(#wx{event=#wxPaint{}}, _,  _State = #graphics_state{panel = Pa
     DC2=wxPaintDC:new(Panel),
     wxDC:clear(DC2),
     wxDC:drawBitmap(DC2,BmpRmap,{0,0}),
-
 
     %io:format("updating screen~n"),
     %Yrounded = round(Bird#bird_graphics_rec.y),
@@ -214,6 +253,7 @@ graphics_reduce(Bird_list,Frame_number,0,Next_N)->
     wx_object:cast(graphics,{bird_locations,Bird_list}),
     case Next_N of
         0 -> io:format("All birds Dead waiting for next generation~n"),
+            wx_object:cast(graphics,{new_generation}),
             receive
                 {new_generation,New_N}->graphics_reduce([],1,New_N,New_N)
             end;
