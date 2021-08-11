@@ -13,7 +13,7 @@
 
 -include_lib("wx/include/wx.hrl").
 -include("Constants.hrl").
--export([start/1,all/1]).
+-export([start/3,all/1]).
 -export([init/1,handle_event/2,handle_sync_event/3,handle_info/2,handle_cast/2]).
 -export([graphics_reduce/1]).
 
@@ -23,19 +23,20 @@
 %%%-------------------------------------------------------------------
 all(Name)->
     Pipes = simulation:generate_pipes(5),
-    start(1),
+    start(pc1,1,1),
     neuralNetwork:start(Name,self()),
     %G_mutated = genotype:mutator(G,3),
     G = genotype:test_Genotype(2,2),
     gen_statem:cast(Name,{start_simulation,self(),G,Pipes,true}).
-start(N) ->
+start(Name,C,N) ->
     Pipes = simulation:generate_pipes(?NUMBER_OF_PIPES),
     wx_object:start({local,?SERVER},?MODULE,[Pipes,[pc1]],[]),
+    %TODO: probably won't work with multiple nodes
     Graphics_reduce_pid = spawn_link(graphics,graphics_reduce,[N]),
     register(graphics_proxy,Graphics_reduce_pid),
     % TODO: start more than one pc
-    pc_server:start(pc1,1,self(),N,2,2),
-    gen_server:cast(pc1,{start_simulation,self(),Pipes}).
+    pc_server:start(Name,1,self(),N,2,2),
+    gen_server:cast(Name,{start_simulation,self(),Pipes}).
 
 init([Pipes,PC_list]) ->
     % graphics

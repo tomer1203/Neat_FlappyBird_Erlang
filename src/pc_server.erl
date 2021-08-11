@@ -95,10 +95,10 @@ handle_cast({finished_simulation,From,Time}, State = #pc_server_state{remaining_
 handle_cast({finished_simulation,From,Time}, State = #pc_server_state{remaining_networks = Remaining_networks,fitness_ets = Fitness_ets})->
   ets:insert(Fitness_ets,{From,Time}),
   {noreply, State#pc_server_state{remaining_networks = Remaining_networks-1}};
-
-handle_cast({network_feedback,From,KeepList}, State = #pc_server_state{gen_ets = Gen_ets})when From =:= State#pc_server_state.learning_pid->
+% from learning fsm
+handle_cast({network_feedback,From,TopGens}, State = #pc_server_state{gen_ets = Gen_ets})when From =:= State#pc_server_state.learning_pid->
   % get list of all available networks(the ones that were killed), a list of the networks to keep and a list of the genotypes to mutate
-  {KeepList,KillList,MutateList}=parseKeepList(Gen_ets,KeepList),
+  {KeepList,KillList,MutateList}=parseKeepList(Gen_ets,TopGens),
   case State#pc_server_state.generation of
     graphics->
       sendKeepAndKillMessage(KeepList,KillList,State#pc_server_state.pip_list),
@@ -107,6 +107,7 @@ handle_cast({network_feedback,From,KeepList}, State = #pc_server_state{gen_ets =
       _ -> NewState=State#pc_server_state{generation=mutation, keep_list = {KeepList,KillList,MutateList}} % TODO- function start simulation, mutate, update ets ! !
   end,{noreply, NewState};
 
+% from graphics
 handle_cast({run_generation,From, Pipe_list}, State) when From =:= graphics->
   {KeepList,KillList,MutateList}=State#pc_server_state.keep_list,
   case State#pc_server_state.generation of

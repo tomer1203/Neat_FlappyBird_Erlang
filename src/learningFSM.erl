@@ -64,7 +64,7 @@ handle_call(_Request, _From, State = #lerningFSM_state{}) ->
   {noreply, NewState :: #lerningFSM_state{}, timeout() | hibernate} |
   {stop, Reason :: term(), NewState :: #lerningFSM_state{}}).
 handle_cast({network_evaluation,PC_PID,Fitness_list}, State = #lerningFSM_state{}) ->
-  Top=top_genotypes(Fitness_list),gen_server:cast(PC_PID,{network_feedback,Top}),{noreply, State};
+  Top=top_genotypes(Fitness_list),gen_server:cast(PC_PID,{network_feedback,self(),Top}),{noreply, State};
 
 handle_cast(_Request, State = #lerningFSM_state{}) ->
   {noreply, State}.
