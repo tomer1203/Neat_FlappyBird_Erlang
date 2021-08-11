@@ -10,6 +10,7 @@
 -author("Omri, Tomer").
 
 -behaviour(gen_server).
+-include("Constants.hrl").
 
 %% API
 -export([start_link/6,start/6]).
@@ -18,11 +19,9 @@
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2,
-  code_change/3]).
-
+code_change/3]).
 -define(SERVER, ?MODULE).
 
--record(pc_server_state, {pc_num,number_of_networks,gen_ets,fitness_ets, remaining_networks, learning_pid, generation=wait, pip_list, keep_list}).
 
 %%%===================================================================
 %%% API
@@ -101,8 +100,8 @@ handle_cast({network_feedback,From,TopGens}, State = #pc_server_state{gen_ets = 
   {KeepList,KillList,MutateList}=parseKeepList(Gen_ets,TopGens),
   case State#pc_server_state.generation of
     graphics->
-      sendKeepAndKillMessage(KeepList,KillList,State#pc_server_state.pip_list),
-      mutate_and_restart_networks(KillList,MutateList,State#pc_server_state.pip_list),
+      sendKeepAndKillMessage(KeepList,KillList,State#pc_server_state.pipe_list,Gen_ets),
+      mutate_and_restart_networks(KillList,MutateList,State#pc_server_state.gen_ets,State#pc_server_state.pipe_list),
       NewState=State#pc_server_state{generation=wait};
       _ -> NewState=State#pc_server_state{generation=mutation, keep_list = {KeepList,KillList,MutateList}} % TODO- function start simulation, mutate, update ets ! !
   end,{noreply, NewState};
@@ -112,10 +111,10 @@ handle_cast({run_generation,From, Pipe_list}, State) when From =:= graphics->
   {KeepList,KillList,MutateList}=State#pc_server_state.keep_list,
   case State#pc_server_state.generation of
       mutation->
-      sendKeepAndKillMessage(KeepList,KillList,Pipe_list),
-      mutate_and_restart_networks(KillList,MutateList,Pipe_list),
+      sendKeepAndKillMessage(KeepList,KillList,Pipe_list,State#pc_server_state.gen_ets),
+      mutate_and_restart_networks(KillList,MutateList,State#pc_server_state.gen_ets,Pipe_list),
       NewState=State#pc_server_state{generation=wait};
-      _ -> NewState=State#pc_server_state{generation=graphics, pip_list = Pipe_list}
+      _ -> NewState=State#pc_server_state{generation=graphics, pipe_list = Pipe_list}
   end,{noreply, NewState};
 
 handle_cast(_Request, State = #pc_server_state{}) ->
@@ -195,30 +194,35 @@ parseKeepList(Gen_ets,[{NetworkPid,Keep,Subscribe}|KeepList],KeepAcc,KillAcc,Mut
       parseKeepList(Gen_ets,KeepList,KeepAcc,[NetworkPid|KillAcc],MutateAcc);
     1 -> % keep but don't mutate
       parseKeepList(Gen_ets,KeepList,[{NetworkPid,Subscribe}|KeepAcc],KillAcc,MutateAcc);
-    N -> % keep and mutate N times
+    N -> % keep and mutate N-1 times(keep once)
       [{Key,Gen}] = ets:lookup(Gen_ets,NetworkPid),
-      parseKeepList(Gen_ets,KeepList,[{NetworkPid,Subscribe}|KeepAcc],KillAcc,[{Gen,N},MutateAcc])
+      parseKeepList(Gen_ets,KeepList,[{NetworkPid,Subscribe}|KeepAcc],KillAcc,[{Gen,N-1},MutateAcc])
   end.
 
-mutate_and_restart_networks([],[],PipeList)->ok;
-mutate_and_restart_networks(KillList,[{Gen,0}|MutateList],PipeList)->mutate_and_restart_networks(KillList,MutateList,PipeList);
-mutate_and_restart_networks([],MutateList,PipeList)->exit("there are more mutations than networks to put them in");
-mutate_and_restart_networks(KillList,[],PipeList)->exit("there are more dead networks than mutations to put in them");
-mutate_and_restart_networks([NetworkPid|KillList],[{Gen,N}|MutateList],PipeList)->
-  assignGenToNetwork(NetworkPid,Gen,PipeList),
-  mutate_and_restart_networks(KillList,[{Gen,N-1}|MutateList],PipeList),
+mutate_and_restart_networks([],[],_Gen_ets,_PipeList)->ok;
+mutate_and_restart_networks(KillList,[{_Gen,0}|MutateList],Gen_ets,PipeList)->mutate_and_restart_networks(KillList,MutateList,Gen_ets,PipeList);
+mutate_and_restart_networks([],MutateList,Gen_ets,PipeList)->exit("there are more mutations than networks to put them in");
+mutate_and_restart_networks(KillList,[],Gen_ets,PipeList)->exit("there are more dead networks than mutations to put in them");
+mutate_and_restart_networks([NetworkPid|KillList],[{Gen,N}|MutateList],Gen_ets,PipeList)->
+  assignGenToNetwork(NetworkPid,Gen,Gen_ets,PipeList),
+  mutate_and_restart_networks(KillList,[{Gen,N-1}|MutateList],Gen_ets,PipeList).
 
-  ok.
-% TODO: UPDATE GEN ETS
-% TODO: how can we mutate a network but still keep a copy of the original the same?
-assignGenToNetwork(NetworkPid,Gen,PipeList)->
+assignGenToNetwork(NetworkPid,Gen,Gen_ets,PipeList)->
   % Copy gen
   Copy_genotype = digraph_utils:subgraph(Gen,digraph:vertices(Gen)),
-  % send start simulation message
+  % the genotype is inserted as is and when it is mutated in the network it will automatically change since this is an ets.
+  % TODO: Notice that you can't send the ets to neighbors immediatly since we first need to let the network mutate it.
+  ets:insert(Gen_ets,Copy_genotype),
+  % TODO: the last value is Sub2graphics and it is currently true only for debugging and needs to be changed in the future..
   gen_statem:cast(NetworkPid,{start_simulation,self(),Copy_genotype,PipeList,true}),
   ok.
-sendKeepAndKillMessage(KeepList,KillList,PipeList)->
+sendKeepAndKillMessage(KeepList,KillList,PipeList,Gen_Ets)->
   % send a keep message to all the keep networks
   [gen_statem:cast(NetworkPid,{keep,self(),PipeList,Subscribe})||{NetworkPid,Subscribe}<-KeepList],
   % send a kill message to all the kill networks
-  [gen_statem:cast(NetworkPid,{kill,self()})||NetworkPid<-KillList].
+  [kill_network_and_gen(NetworkPid,Gen_Ets)||NetworkPid<-KillList].
+
+% kills the network and deletes the gen from the ets(the new gen will be inserted when we restart the network)
+kill_network_and_gen(NetworkPid,Gen_Ets)->
+  ets:delete(Gen_Ets,NetworkPid),
+  gen_statem:cast(NetworkPid,{kill,self()}).
