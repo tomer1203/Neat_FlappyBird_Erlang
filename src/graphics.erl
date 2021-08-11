@@ -35,7 +35,8 @@ start(Name,C,N) ->
     Graphics_reduce_pid = spawn_link(graphics,graphics_reduce,[N]),
     register(graphics_proxy,Graphics_reduce_pid),
     % TODO: start more than one pc
-    pc_server:start(Name,1,self(),N,2,2),
+    {ok,Learning_pid} =  learningFSM:start(),
+    pc_server:start(Name,1,Learning_pid,N,2,2),
     gen_server:cast(Name,{start_simulation,self(),Pipes}).
 
 init([Pipes,PC_list]) ->
@@ -107,6 +108,7 @@ handle_cast({bird_locations,Bird_List},State=#graphics_state{bird_queue = Bird_q
     {noreply, NewState};
 
 handle_cast({new_generation},State=#graphics_state{})->
+    io:format("graphics: starting new generation~n"),
     % TODO: generate new pipes
     PipeList = simulation:generate_pipes(?NUMBER_OF_PIPES),
     [H_pipe|T_pipes] = PipeList,
@@ -114,6 +116,7 @@ handle_cast({new_generation},State=#graphics_state{})->
     NewState = State#graphics_state{pipes_state = #pipes_graphics_rec{visible_pipeList = [H_pipe],extra_pipeList = T_pipes,used_pipeList = []}},
     graphics_proxy!{new_generation,?NUMBER_OF_SUBSCRIBED_BIRDS},
     % TODO: send to pc an ok message
+    io:format("pc list ~p~n",[State#graphics_state.pc_list]),
     [gen_server:cast(PC,{run_generation,self(),PipeList})||PC<-State#graphics_state.pc_list],
     {noreply, NewState}.
 %%handle_info({bird_update,_From,{Collide,Bird_loc}},State=#graphics_state{bird_list = BirdList})->

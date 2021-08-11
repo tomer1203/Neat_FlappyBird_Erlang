@@ -12,7 +12,7 @@
 -behaviour(gen_server).
 
 %% API
--export([start_link/0]).
+-export([start_link/0,start/0]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2,
@@ -31,6 +31,8 @@
   {ok, Pid :: pid()} | ignore | {error, Reason :: term()}).
 start_link() ->
   gen_server:start_link({local, ?SERVER}, ?MODULE, [], []).
+start() ->
+  gen_server:start({local, ?SERVER}, ?MODULE, [], []).
 
 %%%===================================================================
 %%% gen_server callbacks
@@ -104,5 +106,5 @@ code_change(_OldVsn, State = #lerningFSM_state{}, _Extra) ->
 top_genotypes(FitList)->
   SortedFitList=lists:sort(fun({KeyA,ValA}, {KeyB,ValB}) -> {ValA,KeyA} >= {ValB,KeyB} end, FitList),make_keep_kill_List(SortedFitList,length(SortedFitList),[]).
 make_keep_kill_List(_ ,0 ,List) -> List;
-make_keep_kill_List([{PID,_}|T], N ,List) when N < 75 -> make_keep_kill_List(T, N-1 ,List +[{PID,0,false}]);
-make_keep_kill_List([{PID,_}|T], N ,List) when N >= 75 -> make_keep_kill_List(T, N-1 ,List +[{PID,4,true}]).
+make_keep_kill_List([{PID,_}|T], N ,List) when N < 75 -> make_keep_kill_List(T, N-1 ,List ++[{PID,0,false}]);
+make_keep_kill_List([{PID,_}|T], N ,List) when N >= 75 -> make_keep_kill_List(T, N-1 ,List ++[{PID,4,true}]).%TODO: CHANGE TO BACK RECURSION

@@ -72,6 +72,8 @@ idle(cast,{start_simulation,Pc_PID,Genotype,Pipe_list,Sub2graph},State) when Pc_
 
   if
     State#nn_state.require_mutation =:= true ->
+      io:format("~p~n~p~n",[Genotype, digraph:vertices(Genotype)]),
+
       genotype:mutator(Genotype,?NUMBER_OF_MUTATION);
       %TODO- send to pc the new genotype .
     true                                     -> ok

@@ -333,11 +333,12 @@ mutator(G,N) -> Index= rand:uniform(9),
     3 -> mutate_weights(G);
     4 -> mutate_af(G);
     5 -> mutate_af(G);
+    9 -> mutate_af(G);
     %5 -> remove_neuron(G);
     6 -> add_link(G);
     7 -> remove_inlink(G);
-    8 -> remove_outlink(G);
-    9 -> add_neuron(G)
+    8 -> remove_outlink(G)
+    %9 -> add_neuron(G)  % TODO
   end,
   mutator(G,N-1).
 

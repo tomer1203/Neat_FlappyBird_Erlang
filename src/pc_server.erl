@@ -79,7 +79,7 @@ handle_call(_Request, _From, State = #pc_server_state{}) ->
   {noreply, NewState :: #pc_server_state{}, timeout() | hibernate} |
   {stop, Reason :: term(), NewState :: #pc_server_state{}}).
 
-handle_cast({start_simulation,From,Pipe_list}, State = #pc_server_state{gen_ets = Gen_ets})when From =:= State#pc_server_state.learning_pid->
+handle_cast({start_simulation,_From,Pipe_list}, State = #pc_server_state{gen_ets = Gen_ets})->
   First_key = ets:first(Gen_ets),
   start_networks(First_key,Pipe_list,Gen_ets),
   {noreply, State};
@@ -90,6 +90,7 @@ handle_cast({finished_simulation,From,Time}, State = #pc_server_state{remaining_
 handle_cast({finished_simulation,From,Time}, State = #pc_server_state{remaining_networks = 1,fitness_ets = Fitness_ets})->
   ets:insert(Fitness_ets,{From,Time}),
   %TODO: Send fitness scores to learning fsm(either through messages or through ets)
+  gen_server:cast(State#pc_server_state.learning_pid,{network_evaluation,self(),ets:tab2list(Fitness_ets)}),
   {noreply, State#pc_server_state{remaining_networks = 0}};
 handle_cast({finished_simulation,From,Time}, State = #pc_server_state{remaining_networks = Remaining_networks,fitness_ets = Fitness_ets})->
   ets:insert(Fitness_ets,{From,Time}),
@@ -98,6 +99,7 @@ handle_cast({finished_simulation,From,Time}, State = #pc_server_state{remaining_
 handle_cast({network_feedback,From,TopGens}, State = #pc_server_state{gen_ets = Gen_ets})when From =:= State#pc_server_state.learning_pid->
   % get list of all available networks(the ones that were killed), a list of the networks to keep and a list of the genotypes to mutate
   {KeepList,KillList,MutateList}=parseKeepList(Gen_ets,TopGens),
+  io:format("got feedback from learning fsm~n"),
   case State#pc_server_state.generation of
     graphics->
       sendKeepAndKillMessage(KeepList,KillList,State#pc_server_state.pipe_list,Gen_ets),
@@ -107,8 +109,9 @@ handle_cast({network_feedback,From,TopGens}, State = #pc_server_state{gen_ets = 
   end,{noreply, NewState};
 
 % from graphics
-handle_cast({run_generation,From, Pipe_list}, State) when From =:= graphics->
+handle_cast({run_generation,From, Pipe_list}, State)->
   {KeepList,KillList,MutateList}=State#pc_server_state.keep_list,
+  io:format("got feedback from graphics~n"),
   case State#pc_server_state.generation of
       mutation->
       sendKeepAndKillMessage(KeepList,KillList,Pipe_list,State#pc_server_state.gen_ets),
