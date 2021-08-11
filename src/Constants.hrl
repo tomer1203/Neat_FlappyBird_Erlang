@@ -92,8 +92,6 @@
 }).
 
 
-
-
 %% NEURAL NETWORK RECORDS %%
 -record(nn_state, {
   pcPID,
@@ -114,4 +112,17 @@
   bias,               % the bias of the neuron calculation
   af,                 % the activation function used in this neuron
   acc=0                % An Accumulator for the neuron
+}).
+
+%% PC SERVER RECORDS %%
+-record(pc_server_state, {
+  pc_num,
+  number_of_networks,
+  gen_ets,
+  fitness_ets,
+  remaining_networks,
+  learning_pid,
+  generation=wait,
+  pipe_list,
+  keep_list
 }).
