@@ -102,6 +102,11 @@ handle_cast({finished_simulation,From,Time}, State = #pc_server_state{remaining_
 % from learning fsm
 handle_cast({network_feedback,From,TopGens}, State = #pc_server_state{gen_ets = Gen_ets})when From =:= State#pc_server_state.learning_pid->
   % get list of all available networks(the ones that were killed), a list of the networks to keep and a list of the genotypes to mutate
+
+  [{Pid,_,_Fit}|_T] = TopGens,
+  [{_K,G}] = ets:lookup(Gen_ets,Pid),
+  io:format("printing graph~n"),
+  plot_graph:to_file(G,"graph.png","png"),
   {KeepList,KillList,MutateList}=parseKeepList(Gen_ets,TopGens),
   %io:format("got feedback from learning fsm:~p~nlength of list~p~n",[TopGens,length(TopGens)]),
   case State#pc_server_state.generation of
@@ -116,6 +121,7 @@ handle_cast({network_feedback,From,TopGens}, State = #pc_server_state{gen_ets = 
 handle_cast({run_generation,From, Pipe_list}, State)->
 
   io:format("got feedback from graphics~p~n",[State#pc_server_state.number_of_networks]),
+
   case State#pc_server_state.generation of
       mutation->
         {KeepList,KillList,MutateList}=State#pc_server_state.keep_list,
@@ -204,6 +210,11 @@ parseKeepList(Gen_ets,[{NetworkPid,Keep,Subscribe}|KeepList],KeepAcc,KillAcc,Mut
     1 -> % keep but don't mutate
       parseKeepList(Gen_ets,KeepList,[{NetworkPid,Subscribe}|KeepAcc],KillAcc,MutateAcc);
     N -> % keep and mutate N-1 times(keep once)
+      case ets:lookup(Gen_ets,NetworkPid) of
+          []-> io:format("ETS:LOOKUP FAILED: NetworkPid= ~p, ETS length=~p,~nETS=~p~n",[NetworkPid,length(ets:tab2list(Gen_ets)), ets:tab2list(Gen_ets)]);
+          _->ok
+      end,
+
       [{Key,Gen}] = ets:lookup(Gen_ets,NetworkPid),
       parseKeepList(Gen_ets,KeepList,[{NetworkPid,Subscribe}|KeepAcc],KillAcc,[{Gen,N-1}|MutateAcc])
   end.
@@ -220,9 +231,10 @@ mutate_and_restart_networks([NetworkPid|KillList],[{Gen,N}|MutateList],Gen_ets,P
 assignGenToNetwork(NetworkPid,Gen,Gen_ets,PipeList)->
   % Copy gen
   Copy_genotype = digraph_utils:subgraph(Gen,digraph:vertices(Gen)),
+  genotype:mutator(Copy_genotype,round(abs(rand:normal())*15)),
   % the genotype is inserted as is and when it is mutated in the network it will automatically change since this is an ets.
   % TODO: Notice that you can't send the ets to neighbors immediatly since we first need to let the network mutate it.
-  ets:insert(Gen_ets,Copy_genotype),
+  ets:insert(Gen_ets,{NetworkPid, Copy_genotype}),
   % TODO: the last value is Sub2graphics and it is currently true only for debugging and needs to be changed in the future..
   gen_statem:cast(NetworkPid,{start_simulation,self(),Copy_genotype,PipeList,true}),
   ok.

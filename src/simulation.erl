@@ -65,6 +65,7 @@ initiate_simulation(Pipes)->
   [First_pipe| Rest] = Pipes,
   #sim_state{
     tick_time = 1,
+    total_time = 0,
     bird = #bird_rec{
       y = ?BIRD_Y_LOCATION,
       vel = 0,

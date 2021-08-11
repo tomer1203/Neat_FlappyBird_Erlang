@@ -106,5 +106,8 @@ code_change(_OldVsn, State = #lerningFSM_state{}, _Extra) ->
 top_genotypes(FitList)->
   SortedFitList=lists:sort(fun({KeyA,ValA}, {KeyB,ValB}) -> {ValA,KeyA} >= {ValB,KeyB} end, FitList),make_keep_kill_List(SortedFitList,length(SortedFitList),[]).
 make_keep_kill_List(_ ,0 ,List) -> List;
+%make_keep_kill_List([{PID,_}|T],100 ,List) -> make_keep_kill_List(T, 99 ,List ++[{PID,20,true}]);
+%make_keep_kill_List([{PID,_}|T],92 ,List) -> make_keep_kill_List(T, 91 ,List ++[{PID,5,true}]);
+%make_keep_kill_List([{PID,_}|T],91 ,List) -> make_keep_kill_List(T, 90 ,List ++[{PID,5,true}]);
 make_keep_kill_List([{PID,_}|T], N ,List) when N =< 75 -> make_keep_kill_List(T, N-1 ,List ++[{PID,0,false}]);
 make_keep_kill_List([{PID,_}|T], N ,List) when N > 75 -> make_keep_kill_List(T, N-1 ,List ++[{PID,4,true}]).%TODO: CHANGE TO BACK RECURSION

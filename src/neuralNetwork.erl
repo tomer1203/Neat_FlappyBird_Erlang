@@ -72,9 +72,10 @@ idle(cast,{start_simulation,Pc_PID,Genotype,Pipe_list,Sub2graph},State) when Pc_
 
   if
     State#nn_state.require_mutation =:= true ->
+      ok;
 %%      io:format("~p~n~p~n",[Genotype, digraph:vertices(Genotype)]),
 
-      genotype:mutator(Genotype,?NUMBER_OF_MUTATION);
+      %genotype:mutator(Genotype,?NUMBER_OF_MUTATION);
       %TODO- send to pc the new genotype .
     true                                     -> ok
   end,
@@ -117,11 +118,22 @@ simulation(info,{neuron_send, ActuatorPid, Value},State) when ActuatorPid =:= St
       send_to_sensors(Features, State#nn_state.sensorsPIDs),
       {keep_state,NewState};
     true-> % if died
-      gen_server:cast(State#nn_state.pcPID,{finished_simulation,self(),New_simulation_state#sim_state.total_time}),
+      %io:format("died~n"),
+      gen_server:cast(State#nn_state.pcPID,{finished_simulation,self(),fitness_function(New_simulation_state)}),
       {next_state,evaluation,NewState}
   end.
 
+fitness_function(Simulation = #sim_state{bird = Bird,visible_pipeList = Pipes})->
+  [Pipe|_R] = Pipes,
+  BestHeight = Pipe#pipe_rec.height+?PIPE_GAP/2-?PIPE_GAP/5,
+  Second_Pipe_Height = (?BG_HEIGHT-?BASE_HEIGHT)-(Pipe#pipe_rec.height+?PIPE_GAP),
+  Height = 15-15*abs(Bird#bird_rec.y-BestHeight)/max(Pipe#pipe_rec.height,Second_Pipe_Height),
+  Fitness = Simulation#sim_state.total_time+Height
 
+   ,
+  %io:format("Fitness= ~p~n",[Height]),
+  Fitness
+  .
 
 evaluation(cast,{kill,PcPID},State) when PcPID =:= State#nn_state.pcPID ->
   State#nn_state.actuatorPID ! {kill,self()}, %TODO - add to neuron kill message, if the actuator proses is dane is kill all ? (spawn_link) Tomer
@@ -130,7 +142,10 @@ evaluation(cast,{kill,PcPID},State) when PcPID =:= State#nn_state.pcPID ->
   {next_state, NextStateName, New_state};
 evaluation(cast,{keep,PcPID,Pipe_list,Sub2graph},State) when PcPID =:= State#nn_state.pcPID ->
   NextStateName = simulation,
+  %io:format("keep~n"),
   Simulation = simulation:initiate_simulation(Pipe_list),
+  Features = simulation:feature_extraction(Simulation),
+  send_to_sensors(Features, State#nn_state.sensorsPIDs),
   New_stat =State#nn_state{simulation = Simulation, pipList =Pipe_list,sub2graphics = Sub2graph},
   {next_state, NextStateName, New_stat}.
 

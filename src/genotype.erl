@@ -15,6 +15,15 @@
 -export([construct_Genotype/3,get_sensors/1,get_actuator/1,get_layer/2,test_Genotype/2,
   get_layer/1,get_label/2,rand_neutron/1,get_nodes/1,getEdges/1,mutator/2,remove_node/2]).
 
+-export([
+add_bias/1,
+remove_bias/1,
+mutate_weights/1,
+mutate_af/1,
+remove_neuron/1,
+add_link/1,
+remove_inlink/1,
+remove_outlink/1]).
 %for test only
 test_Genotype(NumOfLayers,NumOfNeurons) ->
   ListOfSensors=[#neuron{type = sensor,layer = 0,id=sensor_1},#neuron{type = sensor,layer = 0,id=sensor_2},#neuron{type = sensor,layer = 0,id=sensor_3},#neuron{type = sensor,layer = 0,id=sensor_4}],
@@ -34,17 +43,17 @@ add_sensors(_,[]) -> ok.
 add_actuator(G,NumOfLayers) -> Actuator= #neuron{type =actuator,layer=NumOfLayers+1},
   digraph:add_vertex(G,Actuator#neuron.id,Actuator),
   PrevLayer=get_layer(G,NumOfLayers),
-  [digraph:add_edge(G,X#neuron.id,Actuator#neuron.id,rand:uniform()) ||  X<-PrevLayer].
+  [digraph:add_edge(G,X#neuron.id,Actuator#neuron.id,rand:normal()) ||  X<-PrevLayer].
 
 %add all the layer between the sensors ans the actuator.
 add_layers(G,NumOfLayers,NumOfNeurons) -> add_layers(G,1,NumOfLayers,NumOfNeurons).
 add_layers(G,NumOfLayers,NumOfLayers,NumOfNeurons)-> CurrentLayer= create_layer_of_Neuron(G,NumOfLayers,NumOfNeurons),
   PrevLayer=get_layer(G,NumOfLayers-1),
-  [digraph:add_edge(G,X#neuron.id,Y#neuron.id,rand:uniform()) ||  X<-PrevLayer, Y <-CurrentLayer];
+  [digraph:add_edge(G,X#neuron.id,Y#neuron.id,rand:normal()) ||  X<-PrevLayer, Y <-CurrentLayer];
 add_layers(G,NumOfCurrentLayer,NumOfLayers,NumOfNeurons) ->
   CurrentLayer= create_layer_of_Neuron(G,NumOfCurrentLayer,NumOfNeurons),
   PrevLayer=get_layer(G,NumOfCurrentLayer-1),
-  [digraph:add_edge(G,X#neuron.id,Y#neuron.id,rand:uniform()) ||  X<-PrevLayer, Y <-CurrentLayer],
+  [digraph:add_edge(G,X#neuron.id,Y#neuron.id,rand:normal()) ||  X<-PrevLayer, Y <-CurrentLayer],
   add_layers(G,NumOfCurrentLayer+1,NumOfLayers,NumOfNeurons).
 
 
@@ -92,7 +101,7 @@ add_edge(G,X,Y)->X_neighbours=digraph:out_neighbours(G,X#neuron.id),
     []->digraph:add_edge(G,X#neuron.id,Y#neuron.id,rand:uniform());
     _->already_neighbours
 end.
-add_edge_rand_out(G,N)->io:format("get:~p~n",[N]),
+add_edge_rand_out(G,N)->
   Nodes_from = get_layers_from(G,N#neuron.layer),
   Rand_node_output=rand_element(Nodes_from),
   add_edge(G,N,Rand_node_output).
@@ -201,8 +210,8 @@ probability_choice_sq(N) -> Ens = rand:uniform(100), P=100/math:pow(N,1/2),if
                                                 end.
 % chosen between -Pi/2 and Pi/2
 probability_choice_half() ->Ens = rand:uniform(100), if
-                                                      Ens =< 50 -> math:pi()/2;
-                                                      true -> - math:pi()/2
+                                                      Ens =< 50 ->rand:uniform( 3);
+                                                      true -> - rand:uniform(3)
                                                     end.
 
 rand_af()->
@@ -329,16 +338,17 @@ mutator(_,0) -> ok;
 mutator(G,N) -> Index= rand:uniform(9),
   case Index of
     1 -> add_bias(G);
+    9 -> add_bias(G);
     2 -> remove_bias(G);
     3 -> mutate_weights(G);
+
     4 -> mutate_af(G);
     5 -> mutate_af(G);
-    9 -> mutate_af(G);
     %5 -> remove_neuron(G);
     6 -> add_link(G);
     7 -> remove_inlink(G);
     8 -> remove_outlink(G)
-    %9 -> add_neuron(G)  % TODO
+    %9 -> add_neuron(G)
   end,
   mutator(G,N-1).
 

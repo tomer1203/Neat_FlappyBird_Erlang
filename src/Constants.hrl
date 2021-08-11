@@ -15,10 +15,10 @@
 -define(WIN_WIDTH,600).
 -define(WIN_HEIGHT,800).
 -define(FLOOR,730).
--define(Timer,67).% Graphics Update Timer, default: 67
+-define(Timer,40).% Graphics Update Timer, default: 67
 
 % Bird Constants %
--define(BIRD_X_LOCATION,230).
+-define(BIRD_X_LOCATION,150).%230
 -define(BIRD_Y_LOCATION,400).% this is the starting y location
 -define(MAX_ROTATION,25).
 -define(ROT_VEL,10).
@@ -44,7 +44,8 @@
 -define(BIRD_RADIUS,26).% averaged width and height to 26
 
 % Genotype Constants %
--define(ACTIVATION_FUNCTION_LIST,[gaussian, tanh, cos, sin, sign, bin, trinary, multiquadric, absolute, linear, quadratic, gaussian, sqrt, log, sigmoid]).
+%-define(ACTIVATION_FUNCTION_LIST,[gaussian, tanh, cos, sin, sign, bin, trinary, multiquadric, absolute, linear, quadratic, gaussian, sqrt, log, sigmoid]).
+-define(ACTIVATION_FUNCTION_LIST,[tanh,cos, sin, sign, bin]).
 -define(NUMBER_OF_MUTATION, 3).
 
 -define(NUMBER_OF_SUBSCRIBED_BIRDS,100).
@@ -84,6 +85,8 @@
 -record(graphics_state, {
   frame, panel, dc, paint,
   pc_list, %TODO: maybe change this to a constant list or something
+  simulation_finished,super_graphics,
+  debug_const_pipe_list,
   time = 0, collide = false, base_state, bird_queue = queue:new(), pipes_state, current_bird_list = [],
   bmpRMap,bmpB1Map,bmpB2Map,bmpB3Map,bmpB4Map,bmpPipeMap,bmpBaseMap}).
 -record(base_state,{
