@@ -57,7 +57,7 @@ init([Pipes,PC_list]) ->
     wxSizer:add(UiSizer, Button2,[{flag,?wxEXPAND bor ?wxALL},{border,5}]),
     wxSizer:add(MainSizer, UiSizer),
 
-    {BmpRmap,BmpB1Map,BmpB2Map,BmpB3Map,BmpPipeMap,BmpBaseMap}=createBitMaps(),
+    {BmpRmap,BmpB1Map,BmpB2Map,BmpB3Map,BmpPipeMap,BmpBaseMap,BmpLogoMap}=createBitMaps(),
 
     wxWindow:setSizer(Frame, MainSizer),
     wxSizer:setSizeHints(MainSizer, Frame),
@@ -89,7 +89,7 @@ init([Pipes,PC_list]) ->
         debug_const_pipe_list = Pipes,
         pipes_state = #pipes_graphics_rec{visible_pipeList = [Pipe],extra_pipeList = Extras,used_pipeList = []},
         base_state = NewBase,
-        bmpRMap = BmpRmap,bmpB1Map = BmpB1Map,bmpB2Map = BmpB2Map,bmpB3Map = BmpB3Map,bmpPipeMap = BmpPipeMap,bmpBaseMap = BmpBaseMap,
+        bmpRMap = BmpRmap,bmpB1Map = BmpB1Map,bmpB2Map = BmpB2Map,bmpB3Map = BmpB3Map,bmpPipeMap = BmpPipeMap,bmpBaseMap = BmpBaseMap,bmpLogoMap = BmpLogoMap,
         current_bird_list = []}}.
 
 %%%-------------------------------------------------------------------
@@ -191,6 +191,7 @@ handle_sync_event(#wx{event=#wxPaint{}}, _,  _State = #graphics_state{panel = Pa
     DC2=wxPaintDC:new(Panel),
     wxDC:clear(DC2),
     wxDC:drawBitmap(DC2,BmpRmap,{0,0}),
+    wxDC:drawBitmap(DC2,_State#graphics_state.bmpLogoMap,{round((?BG_WIDTH/2) - 306/2),50+round(math:sin(Time/10)*10)}),
 
     %io:format("updating screen~n"),
     %Yrounded = round(Bird#bird_graphics_rec.y),
@@ -271,7 +272,13 @@ createBitMaps() ->         % create bitmap to all images
     BmpBaseMap = wxBitmap:new(BasemapSc),
     wxImage:destroy(Basemap),
     wxImage:destroy(BasemapSc),
-    {BmpRMap,BmpB1Map,BmpB2Map,BmpB3Map,BmpPipeMap,BmpBaseMap}.
+
+    Logomap = wxImage:new("../Images/Flappy_Logo.png"),
+    LogomapSc = wxImage:scale(Logomap,306,81),
+    BmpLogoMap = wxBitmap:new(LogomapSc),
+    wxImage:destroy(Logomap),
+    wxImage:destroy(LogomapSc),
+    {BmpRMap,BmpB1Map,BmpB2Map,BmpB3Map,BmpPipeMap,BmpBaseMap,BmpLogoMap}.
 
 angle2radians(Angle)->Angle*math:pi()*2/360.
 
@@ -301,5 +308,20 @@ graphics_reduce(Bird_List,Frame_number,N,Next_N)->
             case Collide of
                 true->  graphics_reduce(New_Birdlist,Frame_number,N-1,Next_N-1);
                 false-> graphics_reduce(New_Birdlist,Frame_number,N-1,Next_N)
-            end
+            end;
+        {bird_update,_From,Number,{Collide,Bird_graphics}} when Number<Frame_number->
+            io:format("message slowing graphics down removed~n"),
+            graphics_reduce(Bird_List,Frame_number,N,Next_N);
+        {kill,_From}->ok
+%%    after 1000->
+%%        io:format("message was missing from graphics. removing one bird. Frame: ~p Remaining:~p~n",[Frame_number,N]),
+%%        flush_messages(),
+%%        graphics_reduce(Bird_List,Frame_number,0,0)
+
+    end.
+flush_messages() ->
+    receive
+        _ -> flush_messages()
+    after 0 ->
+        ok
     end.

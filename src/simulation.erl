@@ -155,7 +155,10 @@ simulate_a_frame(Simulation_State = #sim_state{},Jump)->
   Ground_collision = world_collision_detection(Moved_bird),
   Collide = if
     Ground_collision =:= true ->true;
-    true                      -> pipe_collision_detection(Moved_bird,New_visible_pipeList)
+    true                      -> case pipe_collision_detection(Moved_bird,New_visible_pipeList) of
+                                   true -> true;
+                                   false -> end_of_the_world_collision(Simulation_State#sim_state.total_time)
+                                 end
   end,
   % return if collided and new sim state
   Bird_graphics = #bird_graphics_rec{y = Moved_bird#bird_rec.y,angle = Moved_bird#bird_rec.angle},
@@ -211,6 +214,12 @@ world_collision_detection(Bird)->
   case ((Bird#bird_rec.y+2*?BIRD_RADIUS > (?BG_HEIGHT - ?BASE_HEIGHT)) or (Bird#bird_rec.y < 0)) of
     true->true;
     false-> false
+  end.
+
+end_of_the_world_collision(Total_time)->
+  if
+    Total_time > ?END_OF_THE_WORLD -> true;
+    true                           -> false
   end.
 
 generate_pipes(N)->generate_pipes(N,[]).

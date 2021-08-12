@@ -40,8 +40,7 @@ start(Name,PC_PID) ->
 %% @doc Whenever a gen_statem is started using gen_statem:start/[3,4] or
 %% gen_statem:start_link/[3,4], this function is called by the new
 %% process to initialize.
-init([PC_PID]) ->PC_PID!"reached the init",
-  %io:format("created new neural network!~n"),
+init([PC_PID]) ->
   {ok, idle, #nn_state{pcPID = PC_PID}}.
 
 %% @private
@@ -104,7 +103,11 @@ simulation(info,{neuron_send, ActuatorPid, Value},State) when ActuatorPid =:= St
   % simulate a frame
   {Collide,Bird_graphics,New_simulation_state} = simulation:simulate_a_frame(State#nn_state.simulation,Jump),
   NewState = State#nn_state{simulation = New_simulation_state},
-
+  Random_Number = rand:uniform(),
+  if
+    Random_Number<0.0001 -> io:format("Simulating a network failure~n"),exit("oh no random happend");
+    true ->ok
+  end,
   % send the current frame to graphics(only if you are subscribed to him)
   if
     State#nn_state.sub2graphics =:= true -> graphics_proxy!{bird_update,self(),New_simulation_state#sim_state.total_time,{Collide,Bird_graphics}};
@@ -181,6 +184,7 @@ send_to_sensors(Features, SensorsPIDs)->
 
 % construct the neural network(genotype->phenotype), send to Network message:finished_constructing, then beaver like neuron.
 construct_network(G,NnPID)->
+  io:format("G is ~p ~n",[genotype:get_nodes(G)]),
   [Actuator]=genotype:get_actuator(G),
   SelfPID=self(),
   NumOfLayer=(Actuator#neuron.layer) - 1,
