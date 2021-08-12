@@ -13,7 +13,7 @@
 -include("Constants.hrl").
 
 %% API
--export([start_link/6,start/6]).
+-export([start_link/7,start/7]).
 
 -export([nn_monitor/2]).
 
@@ -28,15 +28,15 @@ code_change/3]).
 %%%===================================================================
 
 %% @doc Spawns the server and registers the local name (unique)
--spec(start_link(Name::atom(),Pc_num::integer(), Learning_pid::pid(), Number_of_networks ::integer(),Num_Layers::integer(),Num_Neurons_Per_Layer::integer()) ->
+-spec(start_link(Name::atom(),Pc_num::integer(), Learning_pid::pid(), Number_of_networks ::integer(),Num_Layers::integer(),Num_Neurons_Per_Layer::integer(),Neighbors_Ets_Map::term()) ->
   {ok, Pid :: pid()} | ignore | {error, Reason :: term()}).
-start_link(Name,Pc_num, Learning_pid, Number_of_networks,Num_Layers,Num_Neurons_Per_Layer) ->
-  gen_server:start_link({local, Name}, ?MODULE, [Pc_num, Learning_pid, Number_of_networks,Num_Layers,Num_Neurons_Per_Layer], []).
+start_link(Name,Pc_num, Learning_pid, Number_of_networks,Num_Layers,Num_Neurons_Per_Layer,Neighbors_Ets_Map) ->
+  gen_server:start_link({global, Name}, ?MODULE, [Name,Pc_num, Learning_pid, Number_of_networks,Num_Layers,Num_Neurons_Per_Layer,Neighbors_Ets_Map], []).
 
--spec(start(Name::atom(),Pc_num :: integer(),Learning_pid::pid(), Number_of_networks ::integer(),Num_Layers::integer(),Num_Neurons_Per_Layer::integer()) ->
+-spec(start(Name::atom(),Pc_num :: integer(),Learning_pid::pid(), Number_of_networks ::integer(),Num_Layers::integer(),Num_Neurons_Per_Layer::integer(),Neighbors_Ets_Map::term()) ->
   {ok, Pid :: pid()} | ignore | {error, Reason :: term()}).
-start(Name,Pc_num,Learning_pid,Number_of_networks,Num_Layers,Num_Neurons_Per_Layer) ->
-  gen_server:start({local, Name}, ?MODULE, [Pc_num,Learning_pid,Number_of_networks,Num_Layers,Num_Neurons_Per_Layer], []).
+start(Name,Pc_num,Learning_pid,Number_of_networks,Num_Layers,Num_Neurons_Per_Layer,Neighbors_Ets_Map) ->
+  gen_server:start({local, Name}, ?MODULE, [Name,Pc_num,Learning_pid,Number_of_networks,Num_Layers,Num_Neurons_Per_Layer,Neighbors_Ets_Map], []).
 %%%===================================================================
 %%% gen_server callbacks
 %%%===================================================================
@@ -46,7 +46,7 @@ start(Name,Pc_num,Learning_pid,Number_of_networks,Num_Layers,Num_Neurons_Per_Lay
 -spec(init(N :: integer()) ->
   {ok, State :: #pc_server_state{}} | {ok, State :: #pc_server_state{}, timeout() | hibernate} |
   {stop, Reason :: term()} | ignore).
-init([Pc_num,Learning_pid,Number_of_networks,Num_Layers,Num_Neurons_Per_Layer]) ->
+init([Name,Pc_num,Learning_pid,Number_of_networks,Num_Layers,Num_Neurons_Per_Layer,Neighbors_Ets_Map]) ->
   %PID_genotype_map =#{},
   Networks = construct_networks(self(), Pc_num,Number_of_networks,Num_Layers,Num_Neurons_Per_Layer),
   %[maps:put(G,spawn_monitor(neuralNetwork:start_link()),PID_genotype_map)  || G <-Genotype_list],
@@ -54,10 +54,13 @@ init([Pc_num,Learning_pid,Number_of_networks,Num_Layers,Num_Neurons_Per_Layer]) 
   Gen_ets = ets:new(gen_ets,[set]),
   Fitness_ets = ets:new(fitness_ets,[set]),
   [ets:insert(Gen_ets,{Pid,Graph})||{Pid,Graph}<-Networks],
-  {ok, #pc_server_state{pc_num = Pc_num, learning_pid = Learning_pid,
+  sync_ets(Gen_ets,Learning_pid,Name),
+  {ok, #pc_server_state{name = Name,pc_num = Pc_num, learning_pid = Learning_pid,
     number_of_networks = Number_of_networks,gen_ets = Gen_ets,
-    fitness_ets = Fitness_ets, remaining_networks = Number_of_networks}}.
-
+    fitness_ets = Fitness_ets, remaining_networks = Number_of_networks,neighbours_map_ets = Neighbors_Ets_Map}}.
+%% Neighbors_Ets_Map
+%% Pids -> empty ets
+%%
 %% @private
 %% @doc Handling call messages
 -spec(handle_call(Request :: term(), From :: {pid(), Tag :: term()},
@@ -96,20 +99,25 @@ handle_cast({finished_simulation,From,Time}, State = #pc_server_state{remaining_
 
   %TODO: Send fitness scores to learning fsm(either through messages or through ets)
   %io:format("Fitness ETS: ~p~n length of list:~p~n",[ets:tab2list(Fitness_ets),length(ets:tab2list(Fitness_ets))]),
-  gen_server:cast(State#pc_server_state.learning_pid,{network_evaluation,self(),ets:tab2list(Fitness_ets)}),
+  gen_server:cast(State#pc_server_state.learning_pid,{network_evaluation,State#pc_server_state.name,ets:tab2list(Fitness_ets)}),
   {noreply, State#pc_server_state{remaining_networks = 0}};
 handle_cast({finished_simulation,From,Time}, State = #pc_server_state{remaining_networks = Remaining_networks,fitness_ets = Fitness_ets})->
   ets:insert(Fitness_ets,{From,Time}),
   %io:format("remaining networks ~p~n number of networks~p~n",[Remaining_networks,State#pc_server_state.number_of_networks]),
   {noreply, State#pc_server_state{remaining_networks = Remaining_networks-1}};
+
+handle_cast({neighbor_ets_update,From,Neighbor,List_of_gen}, State = #pc_server_state{})->
+  spawn(fun()->update_ets(List_of_gen,Neighbor,State#pc_server_state.neighbours_map_ets)end);
+
 % from learning fsm
-handle_cast({network_feedback,From,TopGens}, State = #pc_server_state{gen_ets = Gen_ets})when From =:= State#pc_server_state.learning_pid->
+handle_cast({network_feedback,From,TopGens}, State = #pc_server_state{name = Pc_Name,gen_ets = Gen_ets,learning_pid = Learning_FSM_Pid})when From =:= State#pc_server_state.learning_pid->
   % get list of all available networks(the ones that were killed), a list of the networks to keep and a list of the genotypes to mutate
   [{Pid,_,_Fit}|_T] = TopGens,
   [{_K,G}] = ets:lookup(Gen_ets,Pid),
   {KeepList,KillList,MutateList} = parseKeepList(Gen_ets,TopGens),
   send_kill(KillList,Gen_ets),
-  mutate_and_restart_networks(KillList,MutateList,State#pc_server_state.gen_ets,State#pc_server_state.pipe_list),
+  mutate_and_restart_networks(KillList,MutateList,Gen_ets,State#pc_server_state.pipe_list),
+  spawn(fun()->sync_ets(Gen_ets,Learning_FSM_Pid,Pc_Name)end),
   case State#pc_server_state.generation of
     graphics->
       send_keep(KeepList,State#pc_server_state.pipe_list),
@@ -277,7 +285,16 @@ start_simulation_kill([H|T],Pips)->
   gen_statem:cast(H,{start_simulation,self(),Pips}),
   start_simulation_kill(T,Pips).
 
-sync_ets(Gen_ets,Learning_FSM_Pid) ->
+sync_ets(Gen_ets,Learning_FSM_Pid,Pc_pid) ->
+  Pid_Gen_List = ets:tab2list(Gen_ets),
+  Fully_Serialized_ETS = [{Network_Pid,serialize(G)}||{Network_Pid,G}<-Pid_Gen_List],
+  gen_server:cast(Learning_FSM_Pid,{update_generation,Pc_pid,Fully_Serialized_ETS}).
+
+update_ets(List_of_gen,Neighbor,Neighbors_Ets_map)->
+  Gen_ets= maps:get(Neighbor,Neighbors_Ets_map),
+  ets:delete_all_objects(Gen_ets),
+  [ets:insert(Gen_ets,{NetPid,deserialize(Flat_Gen)}) ||{NetPid,Flat_Gen}<-List_of_gen].
+
 
 
 
@@ -300,22 +317,3 @@ deserialize({VL, EL, NL, B}) ->
   ets:insert(E, EL),
   ets:insert(N, NL),
   DG.
-
-
-
-
-
-passer() ->
-  G = digraph:new(),
-  digraph:add_edge(G, V1, V2, "edge1"),
-  digraph:add_edge(G, V1, V3, "edge2"),
-  Pid = spawn(fun receiver/0),
-  Pid ! serialize(G).
-
-receiver() ->
-  receive
-    SG = {_VL, _EL, _NL, _B} ->
-      G = deserialize(SG),
-      io:format("Edges: ~p~n", [digraph:edges(G)]),
-      io:format("Edges: ~p~n", [digraph:vertices(G)])
-  end.

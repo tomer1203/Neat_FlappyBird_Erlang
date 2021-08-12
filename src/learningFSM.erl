@@ -20,7 +20,7 @@
 
 -define(SERVER, ?MODULE).
 
--record(learningFSM_state, {ets_maps=#{},pc_PIDs=[]}).
+-record(learningFSM_state, {ets_maps=#{},pc_names=[]}).
 
 %%%===================================================================
 %%% API
@@ -45,8 +45,8 @@ start() ->
   {stop, Reason :: term()} | ignore).
 %%TODO - get a map from Pids to atom <1.32.2> -> pc1
 %% get list of pids!
-init([Pc_pids, Pid_to_atom]) ->Map=#{}, [create_ets_map(Pc,Pid_to_atom)|| Pc <-Pc_pids],
-  {ok, #learningFSM_state{pc_PIDs = Pc_pids, ets_maps = Map}}.
+init([Pc_Names, Name_to_atom]) ->Map= create_ets_map(Pc_Names,Name_to_atom,#{}),
+  {ok, #learningFSM_state{pc_names = Pc_Names, ets_maps = Map}}.
 
 %% @private
 %% @doc Handling call messages
@@ -77,7 +77,7 @@ handle_cast({update_generation,From,List_of_gen},State) ->
   % clear the old ets and replace whit a new type of gens.
   update_ets(Gen_ets,List_of_gen),
   % send list of gens ti the neighbours.
-  send_to_neighbours(From,List_of_gen,State#learningFSM_state.pc_PIDs),
+  send_to_neighbours(From,List_of_gen,State#learningFSM_state.pc_names),
   {noreply, State};
 
 
@@ -126,11 +126,14 @@ make_keep_kill_List([{PID,_}|T], N ,List) when N > 75 -> make_keep_kill_List(T, 
 
 % get ets and list and enter all the element from the list to the ets.
 update_ets(_,[]) -> ok;
-update_ets(Gen_ets,[H|T]) -> ets:insert(Gen_ets,H),
+update_ets(Gen_ets,[{Key,Value}|T]) -> ets:insert(Gen_ets,{Key,Value}),
   update_ets(Gen_ets,T).
 
 % send all the neighbours the new gens.
-send_to_neighbours(From,List_of_gen,Pc_pids)->[ Pc ! List_of_gen|| Pc<-Pc_pids,Pc =/= From].
+send_to_neighbours(From,List_of_gen,Pc_names)->[ gen_server:cast({global,Pc},{neighbor_ets_update,self(),List_of_gen})|| Pc<-Pc_names,Pc =/= From].
 
-create_ets_map(Pc_PID,Pid_to_atom)->Pc_ets = ets:new(maps:get(Pc_PID,Pid_to_atom),[set]).
+
+create_ets_map([],_,Map)->Map;
+create_ets_map([H|T],Name_to_atom,Map)->Pc_ets = ets:new(maps:get(H,Name_to_atom),[set]),
+  New_map=maps:put(H,Pc_ets,Map), create_ets_map(T,Name_to_atom,New_map).
 

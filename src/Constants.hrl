@@ -9,7 +9,10 @@
 -author("tomer").
 
 %% CONSTANTS %%
-
+-define(PC1, 'pc1@132.72.104.').
+-define(PC2, 'pc2@132.72.104.').
+-define(PC3, 'pc3@132.72.104.').
+-define(PC4, 'pc4@132.72.104.').
 % World Constants %
 % these are not really used since the more accurate measurement is the actual graphics size
 -define(WIN_WIDTH,600).
@@ -122,9 +125,11 @@
 
 %% PC SERVER RECORDS %%
 -record(pc_server_state, {
+  name,
   pc_num,
   number_of_networks,
   gen_ets,
+  neighbours_map_ets,
   fitness_ets,
   remaining_networks,
   learning_pid,
