@@ -77,9 +77,13 @@ initiate_simulation(Pipes)->
 feature_extraction(Simulation_State = #sim_state{})->
   Bird_Y           = Simulation_State#sim_state.bird#bird_rec.y / ?BG_HEIGHT,
   Bird_Y_vel       = Simulation_State#sim_state.bird#bird_rec.vel,
-  First_pipe       = hd(Simulation_State#sim_state.visible_pipeList),
-  Distance_to_pipe = (First_pipe#pipe_rec.x - ?BIRD_X_LOCATION )/ ?BG_WIDTH,
-  PipeHeight       = First_pipe#pipe_rec.height / ?BG_HEIGHT,
+  [First_pipe|R]       = Simulation_State#sim_state.visible_pipeList,
+  Forward_pipe = if
+    First_pipe#pipe_rec.x +?PIPE_WIDTH + 20 < ?BIRD_X_LOCATION -> [F|_T]= R,io:format("switched_pipes~n"),F;
+    true                                                 -> First_pipe
+  end,
+  Distance_to_pipe = (Forward_pipe#pipe_rec.x - ?BIRD_X_LOCATION )/ ?BG_WIDTH,
+  PipeHeight       = Forward_pipe#pipe_rec.height / ?BG_HEIGHT,
   [Bird_Y, Bird_Y_vel, Distance_to_pipe, PipeHeight].
 simulate_pipes(Pipe_State = #pipes_graphics_rec{})->
   % move pipes

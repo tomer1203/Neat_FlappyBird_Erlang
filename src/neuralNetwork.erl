@@ -103,11 +103,15 @@ simulation(info,{neuron_send, ActuatorPid, Value},State) when ActuatorPid =:= St
   % simulate a frame
   {Collide,Bird_graphics,New_simulation_state} = simulation:simulate_a_frame(State#nn_state.simulation,Jump),
   NewState = State#nn_state{simulation = New_simulation_state},
+
+  % TODO: REMOVE THIS SECTION OF CODE(IT SIMULATES A CRASH AND WE SHOULD OBVIOUSLY NOT INCLUDE THIS)
   Random_Number = rand:uniform(),
   if
-    Random_Number<0.0001 -> io:format("Simulating a network failure~n"),exit("oh no random happend");
+    Random_Number<0.00001 -> io:format("Simulating a network failure~n"),exit("oh no random happend");
     true ->ok
   end,
+  %TODO: UP TO THIS POINT
+
   % send the current frame to graphics(only if you are subscribed to him)
   if
     State#nn_state.sub2graphics =:= true -> graphics_proxy!{bird_update,self(),New_simulation_state#sim_state.total_time,{Collide,Bird_graphics}};
@@ -127,8 +131,8 @@ simulation(info,{neuron_send, ActuatorPid, Value},State) when ActuatorPid =:= St
   end.
 
 fitness_function(Simulation = #sim_state{bird = Bird,visible_pipeList = Pipes})->
-  [Pipe|_R] = Pipes,
-  BestHeight = Pipe#pipe_rec.height+?PIPE_GAP/2-?PIPE_GAP/5,
+  [Pipe|R] = Pipes,
+  BestHeight = Pipe#pipe_rec.height+?PIPE_GAP/2,
   Second_Pipe_Height = (?BG_HEIGHT-?BASE_HEIGHT)-(Pipe#pipe_rec.height+?PIPE_GAP),
   Height = 15-15*abs(Bird#bird_rec.y-BestHeight)/max(Pipe#pipe_rec.height,Second_Pipe_Height),
   Fitness = Simulation#sim_state.total_time+Height

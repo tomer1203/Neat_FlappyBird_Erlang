@@ -81,7 +81,7 @@ handle_call(_Request, _From, State = #pc_server_state{}) ->
 handle_cast({start_simulation,_From,Pipe_list}, State = #pc_server_state{gen_ets = Gen_ets})->
   First_key = ets:first(Gen_ets),
   start_networks(First_key,Pipe_list,Gen_ets),
-  {noreply, State};
+  {noreply, State#pc_server_state{pipe_list = Pipe_list}};
 
 % A message from one of the neural networks to the Pc updating it how the simulation went
 handle_cast({finished_simulation,From,Time}, State = #pc_server_state{remaining_networks = 0})->

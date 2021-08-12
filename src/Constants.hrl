@@ -15,7 +15,7 @@
 -define(WIN_WIDTH,600).
 -define(WIN_HEIGHT,800).
 -define(FLOOR,730).
--define(Timer,40).% Graphics Update Timer, default: 67
+-define(Timer,67).% Graphics Update Timer, default: 67
 
 % Bird Constants %
 -define(BIRD_X_LOCATION,120).%230
