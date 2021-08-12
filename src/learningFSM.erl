@@ -88,6 +88,7 @@ handle_info(_Info, State = #lerningFSM_state{}) ->
 -spec(terminate(Reason :: (normal | shutdown | {shutdown, term()} | term()),
     State :: #lerningFSM_state{}) -> term()).
 terminate(_Reason, _State = #lerningFSM_state{}) ->
+  io:format("Closing learning fsm~n"),
   ok.
 
 %% @private

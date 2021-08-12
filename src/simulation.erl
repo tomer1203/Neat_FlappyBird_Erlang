@@ -77,9 +77,13 @@ initiate_simulation(Pipes)->
 feature_extraction(Simulation_State = #sim_state{})->
   Bird_Y           = Simulation_State#sim_state.bird#bird_rec.y / ?BG_HEIGHT,
   Bird_Y_vel       = Simulation_State#sim_state.bird#bird_rec.vel,
-  First_pipe       = hd(Simulation_State#sim_state.visible_pipeList),
-  Distance_to_pipe = (First_pipe#pipe_rec.x - ?BIRD_X_LOCATION )/ ?BG_WIDTH,
-  PipeHeight       = First_pipe#pipe_rec.height / ?BG_HEIGHT,
+  [First_pipe|R]       = Simulation_State#sim_state.visible_pipeList,
+  Forward_pipe = if
+    First_pipe#pipe_rec.x +?PIPE_WIDTH + 20 < ?BIRD_X_LOCATION -> [F|_T]= R,io:format("switched_pipes~n"),F;
+    true                                                 -> First_pipe
+  end,
+  Distance_to_pipe = (Forward_pipe#pipe_rec.x - ?BIRD_X_LOCATION )/ ?BG_WIDTH,
+  PipeHeight       = Forward_pipe#pipe_rec.height / ?BG_HEIGHT,
   [Bird_Y, Bird_Y_vel, Distance_to_pipe, PipeHeight].
 simulate_pipes(Pipe_State = #pipes_graphics_rec{})->
   % move pipes
@@ -155,7 +159,10 @@ simulate_a_frame(Simulation_State = #sim_state{},Jump)->
   Ground_collision = world_collision_detection(Moved_bird),
   Collide = if
     Ground_collision =:= true ->true;
-    true                      -> pipe_collision_detection(Moved_bird,New_visible_pipeList)
+    true                      -> case pipe_collision_detection(Moved_bird,New_visible_pipeList) of
+                                   true -> true;
+                                   false -> end_of_the_world_collision(Simulation_State#sim_state.total_time)
+                                 end
   end,
   % return if collided and new sim state
   Bird_graphics = #bird_graphics_rec{y = Moved_bird#bird_rec.y,angle = Moved_bird#bird_rec.angle},
@@ -211,6 +218,12 @@ world_collision_detection(Bird)->
   case ((Bird#bird_rec.y+2*?BIRD_RADIUS > (?BG_HEIGHT - ?BASE_HEIGHT)) or (Bird#bird_rec.y < 0)) of
     true->true;
     false-> false
+  end.
+
+end_of_the_world_collision(Total_time)->
+  if
+    Total_time > ?END_OF_THE_WORLD -> true;
+    true                           -> false
   end.
 
 generate_pipes(N)->generate_pipes(N,[]).

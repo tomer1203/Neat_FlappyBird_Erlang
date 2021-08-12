@@ -15,7 +15,7 @@
 -define(WIN_WIDTH,600).
 -define(WIN_HEIGHT,800).
 -define(FLOOR,730).
--define(Timer,40).% Graphics Update Timer, default: 67
+-define(Timer,67).% Graphics Update Timer, default: 67
 
 % Bird Constants %
 -define(BIRD_X_LOCATION,120).%230
@@ -31,6 +31,7 @@
 -define(PIPE_MIN_DISTANCE_FROM_EDGES,50).
 -define(PIPE_MAX_HEIGHT,?BG_HEIGHT-?BASE_HEIGHT-?PIPE_GAP-?PIPE_MIN_DISTANCE_FROM_EDGES).
 -define(NUMBER_OF_PIPES,10).
+-define(END_OF_THE_WORLD,10000).
 
 % Graphics Constants %
 -define(BG_WIDTH,564).%288
@@ -89,7 +90,7 @@
   simulation_finished,super_graphics,
   debug_const_pipe_list,
   time = 0, collide = false, base_state, bird_queue = queue:new(), pipes_state, current_bird_list = [],
-  bmpRMap,bmpB1Map,bmpB2Map,bmpB3Map,bmpB4Map,bmpPipeMap,bmpBaseMap}).
+  bmpRMap,bmpB1Map,bmpB2Map,bmpB3Map,bmpB4Map,bmpPipeMap,bmpBaseMap,bmpLogoMap}).
 -record(base_state,{
   x1 = 0,
   x2 = ?BASE_WIDTH

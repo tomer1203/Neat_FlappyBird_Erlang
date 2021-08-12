@@ -15,7 +15,7 @@
 %% API
 -export([start_link/6,start/6]).
 
--export([nn_monitor/1]).
+-export([nn_monitor/2]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2,
@@ -48,13 +48,12 @@ start(Name,Pc_num,Learning_pid,Number_of_networks,Num_Layers,Num_Neurons_Per_Lay
   {stop, Reason :: term()} | ignore).
 init([Pc_num,Learning_pid,Number_of_networks,Num_Layers,Num_Neurons_Per_Layer]) ->
   %PID_genotype_map =#{},
-  Networks = construct_networks(Pc_num,Number_of_networks,Num_Layers,Num_Neurons_Per_Layer),
+  Networks = construct_networks(self(), Pc_num,Number_of_networks,Num_Layers,Num_Neurons_Per_Layer),
   %[maps:put(G,spawn_monitor(neuralNetwork:start_link()),PID_genotype_map)  || G <-Genotype_list],
   %ets:insert(tableEx9, {K,V})
   Gen_ets = ets:new(gen_ets,[set]),
   Fitness_ets = ets:new(fitness_ets,[set]),
   [ets:insert(Gen_ets,{Pid,Graph})||{Pid,Graph}<-Networks],
-  io:format("Number of networks ~p~n",[Number_of_networks]),
   {ok, #pc_server_state{pc_num = Pc_num, learning_pid = Learning_pid,
     number_of_networks = Number_of_networks,gen_ets = Gen_ets,
     fitness_ets = Fitness_ets, remaining_networks = Number_of_networks}}.
@@ -82,7 +81,7 @@ handle_call(_Request, _From, State = #pc_server_state{}) ->
 handle_cast({start_simulation,_From,Pipe_list}, State = #pc_server_state{gen_ets = Gen_ets})->
   First_key = ets:first(Gen_ets),
   start_networks(First_key,Pipe_list,Gen_ets),
-  {noreply, State};
+  {noreply, State#pc_server_state{pipe_list = Pipe_list}};
 
 % A message from one of the neural networks to the Pc updating it how the simulation went
 handle_cast({finished_simulation,From,Time}, State = #pc_server_state{remaining_networks = 0})->
@@ -125,9 +124,26 @@ handle_cast({run_generation,From, Pipe_list}, State)->
         {KeepList,KillList,_}=State#pc_server_state.keep_list,
         send_keep(KeepList,Pipe_list),
         start_simulation_kill(KillList,Pipe_list),
-        NewState=State#pc_server_state{generation=wait,remaining_networks = State#pc_server_state.number_of_networks};
+        NewState=State#pc_server_state{generation=wait,remaining_networks = State#pc_server_state.number_of_networks,pipe_list = Pipe_list};
       _ -> NewState=State#pc_server_state{generation=graphics, pipe_list = Pipe_list,remaining_networks = State#pc_server_state.number_of_networks}
   end,{noreply, NewState};
+
+handle_cast({network_down,_,Nn_Pid},State = #pc_server_state{gen_ets = Gen_ets,fitness_ets = Fitness_ETS,pc_num = PC_num,pipe_list = Pipes})->
+  io:format("network_down recognized starting restart~n"),
+  [{_Key,Gen}] = ets:lookup(Gen_ets,Nn_Pid),
+  ets:delete(Gen_ets,Nn_Pid),
+  ets:delete(Fitness_ETS,Nn_Pid),
+  Result = ets:lookup(Gen_ets,Nn_Pid),
+  io:format("Result of delete ~p ~n",[Result]),
+  Self = self(),
+  {ok,New_Nn_pid} = neuralNetwork:start(get_nn_name(PC_num,erlang:unique_integer()),Self),
+  spawn(?MODULE, nn_monitor, [New_Nn_pid,Self]),
+  ets:insert(Gen_ets,{New_Nn_pid,Gen}),
+  ets:insert(Fitness_ETS,{New_Nn_pid,0}),
+  gen_statem:cast(New_Nn_pid,{start_simulation,self(),Gen,Pipes,true}),
+  io:format("network restarted~n"),
+  {noreply, State};
+
 
 handle_cast(_Request, State = #pc_server_state{}) ->
   {noreply, State}.
@@ -164,24 +180,28 @@ code_change(_OldVsn, State = #pc_server_state{}, _Extra) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
-construct_networks(Pc_num,N,Num_Layers,Num_Neurons_Per_Layer)->
-  construct_networks(Pc_num,N,self(),Num_Layers,Num_Neurons_Per_Layer,[]).
+construct_networks(PC_Pid,Pc_num,N,Num_Layers,Num_Neurons_Per_Layer)->
+  construct_networks(PC_Pid,Pc_num,N,self(),Num_Layers,Num_Neurons_Per_Layer,[]).
 
-construct_networks(_Pc_num,0,_Self,_Num_Layers,_Num_Neurons_Per_Layer,Acc)-> Acc;
-construct_networks(Pc_num,N,Self,Num_Layers,Num_Neurons_Per_Layer,Acc)->
+construct_networks(_PC_Pid,_Pc_num,0,_Self,_Num_Layers,_Num_Neurons_Per_Layer,Acc)-> Acc;
+construct_networks(PC_Pid,Pc_num,N,Self,Num_Layers,Num_Neurons_Per_Layer,Acc)->
+  io:format("am i really here?~n"),
   G = genotype:test_Genotype(Num_Layers,Num_Neurons_Per_Layer),
   {ok,Proc} = neuralNetwork:start(get_nn_name(Pc_num,N),Self),
-  spawn(?MODULE, nn_monitor, [Proc]),
-  construct_networks(Pc_num,N-1,Self,Num_Layers,Num_Neurons_Per_Layer,[{Proc,G}|Acc]).
+  spawn(?MODULE, nn_monitor, [Proc,PC_Pid]),
+  construct_networks(PC_Pid,Pc_num,N-1,Self,Num_Layers,Num_Neurons_Per_Layer,[{Proc,G}|Acc]).
 
 % monitors a neural network and waits checks if it is down.
-nn_monitor(Proc) ->
+nn_monitor(Proc,PC_pid) ->
   erlang:monitor(process,Proc),
   receive
     {'DOWN', Ref, process, Pid,  normal} ->
-      io:format("~p said that ~p died by natural causes~n",[Ref,Pid]);%TODO: if network is down we need to restart it!
+      io:format("~p said that ~p died by natural causes~n",[Ref,Pid]),
+      gen_server:cast(PC_pid,{network_down,self(),Pid});%TODO: if network is down we need to restart it!
+
     {'DOWN', Ref, process, Pid,  Reason} ->
-      io:format("~p said that ~p died by unnatural causes~n~p",[Ref,Pid,Reason]) %TODO: if network is down we need to restart it!
+      io:format("~p said that ~p died by unnatural causes~n~p",[Ref,Pid,Reason]), %TODO: if network is down we need to restart it!
+      gen_server:cast(PC_pid,{network_down,self(),Pid})
   end.
 
 % opens up the networks
