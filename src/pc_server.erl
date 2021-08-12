@@ -78,6 +78,10 @@ handle_call(_Request, _From, State = #pc_server_state{}) ->
   {noreply, NewState :: #pc_server_state{}, timeout() | hibernate} |
   {stop, Reason :: term(), NewState :: #pc_server_state{}}).
 
+%handle_cast({start_simulation,_From,Pipe_list}, State = #pc_server_state{gen_ets = Gen_ets})
+
+
+
 handle_cast({start_simulation,_From,Pipe_list}, State = #pc_server_state{gen_ets = Gen_ets})->
   First_key = ets:first(Gen_ets),
   start_networks(First_key,Pipe_list,Gen_ets),
@@ -272,3 +276,46 @@ start_simulation_kill([],_)->ok;
 start_simulation_kill([H|T],Pips)->
   gen_statem:cast(H,{start_simulation,self(),Pips}),
   start_simulation_kill(T,Pips).
+
+sync_ets(Gen_ets,Learning_FSM_Pid) ->
+
+
+
+
+serialize({digraph, V, E, N, B}) ->
+  {ets:tab2list(V),
+    ets:tab2list(E),
+    ets:tab2list(N),
+    B}.
+
+deserialize({VL, EL, NL, B}) ->
+  DG = {digraph, V, E, N, B} = case B of
+                                 true -> digraph:new();
+                                 false -> digraph:new([acyclic])
+                               end,
+  ets:delete_all_objects(V),
+  ets:delete_all_objects(E),
+  ets:delete_all_objects(N),
+  ets:insert(V, VL),
+  ets:insert(E, EL),
+  ets:insert(N, NL),
+  DG.
+
+
+
+
+
+passer() ->
+  G = digraph:new(),
+  digraph:add_edge(G, V1, V2, "edge1"),
+  digraph:add_edge(G, V1, V3, "edge2"),
+  Pid = spawn(fun receiver/0),
+  Pid ! serialize(G).
+
+receiver() ->
+  receive
+    SG = {_VL, _EL, _NL, _B} ->
+      G = deserialize(SG),
+      io:format("Edges: ~p~n", [digraph:edges(G)]),
+      io:format("Edges: ~p~n", [digraph:vertices(G)])
+  end.

@@ -20,7 +20,7 @@
 
 -define(SERVER, ?MODULE).
 
--record(lerningFSM_state, {}).
+-record(learningFSM_state, {ets_maps=#{},pc_PIDs=[]}).
 
 %%%===================================================================
 %%% API
@@ -41,43 +41,57 @@ start() ->
 %% @private
 %% @doc Initializes the server
 -spec(init(Args :: term()) ->
-  {ok, State :: #lerningFSM_state{}} | {ok, State :: #lerningFSM_state{}, timeout() | hibernate} |
+  {ok, State :: #learningFSM_state{}} | {ok, State :: #learningFSM_state{}, timeout() | hibernate} |
   {stop, Reason :: term()} | ignore).
-init([]) ->
-  {ok, #lerningFSM_state{}}.
+%%TODO - get a map from Pids to atom <1.32.2> -> pc1
+%% get list of pids!
+init([Pc_pids, Pid_to_atom]) ->Map=#{}, [create_ets_map(Pc,Pid_to_atom)|| Pc <-Pc_pids],
+  {ok, #learningFSM_state{pc_PIDs = Pc_pids, ets_maps = Map}}.
 
 %% @private
 %% @doc Handling call messages
 -spec(handle_call(Request :: term(), From :: {pid(), Tag :: term()},
-    State :: #lerningFSM_state{}) ->
-  {reply, Reply :: term(), NewState :: #lerningFSM_state{}} |
-  {reply, Reply :: term(), NewState :: #lerningFSM_state{}, timeout() | hibernate} |
-  {noreply, NewState :: #lerningFSM_state{}} |
-  {noreply, NewState :: #lerningFSM_state{}, timeout() | hibernate} |
-  {stop, Reason :: term(), Reply :: term(), NewState :: #lerningFSM_state{}} |
-  {stop, Reason :: term(), NewState :: #lerningFSM_state{}}).
-handle_call(_Request, _From, State = #lerningFSM_state{}) ->
+    State :: #learningFSM_state{}) ->
+  {reply, Reply :: term(), NewState :: #learningFSM_state{}} |
+  {reply, Reply :: term(), NewState :: #learningFSM_state{}, timeout() | hibernate} |
+  {noreply, NewState :: #learningFSM_state{}} |
+  {noreply, NewState :: #learningFSM_state{}, timeout() | hibernate} |
+  {stop, Reason :: term(), Reply :: term(), NewState :: #learningFSM_state{}} |
+  {stop, Reason :: term(), NewState :: #learningFSM_state{}}).
+handle_call(_Request, _From, State = #learningFSM_state{}) ->
   {reply, ok, State}.
 
 %% @private
 %% @doc Handling cast messages
--spec(handle_cast(Request :: term(), State :: #lerningFSM_state{}) ->
-  {noreply, NewState :: #lerningFSM_state{}} |
-  {noreply, NewState :: #lerningFSM_state{}, timeout() | hibernate} |
-  {stop, Reason :: term(), NewState :: #lerningFSM_state{}}).
-handle_cast({network_evaluation,PC_PID,Fitness_list}, State = #lerningFSM_state{}) ->
+-spec(handle_cast(Request :: term(), State :: #learningFSM_state{}) ->
+  {noreply, NewState :: #learningFSM_state{}} |
+  {noreply, NewState :: #learningFSM_state{}, timeout() | hibernate} |
+  {stop, Reason :: term(), NewState :: #learningFSM_state{}}).
+handle_cast({network_evaluation,PC_PID,Fitness_list}, State = #learningFSM_state{}) ->
   Keep_kill_List=top_genotypes(Fitness_list),gen_server:cast(PC_PID,{network_feedback,self(),Keep_kill_List}),{noreply, State};
 
-handle_cast(_Request, State = #lerningFSM_state{}) ->
+handle_cast({update_generation,From,List_of_gen},State) ->
+  Map_ets=State#learningFSM_state.ets_maps,
+  Gen_ets = maps:get(From,Map_ets),
+  ets:delete_all_objects(Gen_ets),
+  % clear the old ets and replace whit a new type of gens.
+  update_ets(Gen_ets,List_of_gen),
+  % send list of gens ti the neighbours.
+  send_to_neighbours(From,List_of_gen,State#learningFSM_state.pc_PIDs),
+  {noreply, State};
+
+
+
+handle_cast(_Request, State = #learningFSM_state{}) ->
   {noreply, State}.
 
 %% @private
 %% @doc Handling all non call/cast messages
--spec(handle_info(Info :: timeout() | term(), State :: #lerningFSM_state{}) ->
-  {noreply, NewState :: #lerningFSM_state{}} |
-  {noreply, NewState :: #lerningFSM_state{}, timeout() | hibernate} |
-  {stop, Reason :: term(), NewState :: #lerningFSM_state{}}).
-handle_info(_Info, State = #lerningFSM_state{}) ->
+-spec(handle_info(Info :: timeout() | term(), State :: #learningFSM_state{}) ->
+  {noreply, NewState :: #learningFSM_state{}} |
+  {noreply, NewState :: #learningFSM_state{}, timeout() | hibernate} |
+  {stop, Reason :: term(), NewState :: #learningFSM_state{}}).
+handle_info(_Info, State = #learningFSM_state{}) ->
   {noreply, State}.
 
 %% @private
@@ -86,17 +100,17 @@ handle_info(_Info, State = #lerningFSM_state{}) ->
 %% necessary cleaning up. When it returns, the gen_server terminates
 %% with Reason. The return value is ignored.
 -spec(terminate(Reason :: (normal | shutdown | {shutdown, term()} | term()),
-    State :: #lerningFSM_state{}) -> term()).
-terminate(_Reason, _State = #lerningFSM_state{}) ->
+    State :: #learningFSM_state{}) -> term()).
+terminate(_Reason, _State = #learningFSM_state{}) ->
   io:format("Closing learning fsm~n"),
   ok.
 
 %% @private
 %% @doc Convert process state when code is changed
--spec(code_change(OldVsn :: term() | {down, term()}, State :: #lerningFSM_state{},
+-spec(code_change(OldVsn :: term() | {down, term()}, State :: #learningFSM_state{},
     Extra :: term()) ->
-  {ok, NewState :: #lerningFSM_state{}} | {error, Reason :: term()}).
-code_change(_OldVsn, State = #lerningFSM_state{}, _Extra) ->
+  {ok, NewState :: #learningFSM_state{}} | {error, Reason :: term()}).
+code_change(_OldVsn, State = #learningFSM_state{}, _Extra) ->
   {ok, State}.
 
 %%%===================================================================
@@ -107,8 +121,16 @@ code_change(_OldVsn, State = #lerningFSM_state{}, _Extra) ->
 top_genotypes(FitList)->
   SortedFitList=lists:sort(fun({KeyA,ValA}, {KeyB,ValB}) -> {ValA,KeyA} >= {ValB,KeyB} end, FitList),make_keep_kill_List(SortedFitList,length(SortedFitList),[]).
 make_keep_kill_List(_ ,0 ,List) -> List;
-%make_keep_kill_List([{PID,_}|T],100 ,List) -> make_keep_kill_List(T, 99 ,List ++[{PID,20,true}]);
-%make_keep_kill_List([{PID,_}|T],92 ,List) -> make_keep_kill_List(T, 91 ,List ++[{PID,5,true}]);
-%make_keep_kill_List([{PID,_}|T],91 ,List) -> make_keep_kill_List(T, 90 ,List ++[{PID,5,true}]);
 make_keep_kill_List([{PID,_}|T], N ,List) when N =< 75 -> make_keep_kill_List(T, N-1 ,List ++[{PID,0,false}]);
 make_keep_kill_List([{PID,_}|T], N ,List) when N > 75 -> make_keep_kill_List(T, N-1 ,List ++[{PID,4,true}]).%TODO: CHANGE TO BACK RECURSION
+
+% get ets and list and enter all the element from the list to the ets.
+update_ets(_,[]) -> ok;
+update_ets(Gen_ets,[H|T]) -> ets:insert(Gen_ets,H),
+  update_ets(Gen_ets,T).
+
+% send all the neighbours the new gens.
+send_to_neighbours(From,List_of_gen,Pc_pids)->[ Pc ! List_of_gen|| Pc<-Pc_pids,Pc =/= From].
+
+create_ets_map(Pc_PID,Pid_to_atom)->Pc_ets = ets:new(maps:get(Pc_PID,Pid_to_atom),[set]).
+
