@@ -15,7 +15,7 @@
 -define(WIN_WIDTH,600).
 -define(WIN_HEIGHT,800).
 -define(FLOOR,730).
--define(Timer,67).% Graphics Update Timer, default: 67
+-define(Timer,40).% Graphics Update Timer, default: 67
 
 % Bird Constants %
 -define(BIRD_X_LOCATION,120).%230
@@ -28,10 +28,11 @@
 -define(PIPE_GAP,200).
 -define(X_VELOCITY,5).
 -define(GRAVITY,4). % 3
+-define(JUMP_VELOCITY,-10.5). % -10.5
 -define(PIPE_MIN_DISTANCE_FROM_EDGES,50).
 -define(PIPE_MAX_HEIGHT,?BG_HEIGHT-?BASE_HEIGHT-?PIPE_GAP-?PIPE_MIN_DISTANCE_FROM_EDGES).
--define(NUMBER_OF_PIPES,10).
--define(END_OF_THE_WORLD,10000).
+-define(NUMBER_OF_PIPES,20).
+-define(END_OF_THE_WORLD,5000).
 
 % Graphics Constants %
 -define(BG_WIDTH,564).%288

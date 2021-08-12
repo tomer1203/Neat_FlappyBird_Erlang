@@ -30,7 +30,7 @@
 %%    gen_statem:cast(Name,{start_simulation,self(),G,Pipes,true}).
 start(Name,C,N) ->
     Pipes = simulation:generate_pipes(?NUMBER_OF_PIPES),
-    Res = wx_object:start({local,?SERVER},?MODULE,[Pipes,[Name],C,N],[]),io:format("graphics pid= ~p~n",[Res]).
+    Res = wx_object:start({local,graphics},?MODULE,[Pipes,[Name],C,N],[]),io:format("graphics pid= ~p~n",[Res]).
 initialize_system(PC_List,N,Pipes)->
     [Name] = PC_List, % TODO: WHEN THERE ARE MULTIPLE COMPUTERS THIS WILL NEED TO CHANGE
     %TODO: probably won't work with multiple nodes
@@ -39,7 +39,7 @@ initialize_system(PC_List,N,Pipes)->
     % TODO: start more than one pc
     io:format("initialize graphics pid= ~p~n",[self()]),
     {ok,Learning_pid} =  learningFSM:start_link(),
-    pc_server:start(Name,1,Learning_pid,N,2,5),
+    pc_server:start_link(Name,1,Learning_pid,N,2,5),
     gen_server:cast(Name,{start_simulation,self(),Pipes}).
 init([Pipes,PC_list,C,N]) ->
     initialize_system(PC_list,N,Pipes),
@@ -244,12 +244,14 @@ draw_base(PaintPanel, BmpBaseMap, X1, X2)->
     wxDC:drawBitmap(PaintPanel,BmpBaseMap,{X1,?BG_HEIGHT - ?BASE_HEIGHT}),
     wxDC:drawBitmap(PaintPanel,BmpBaseMap,{X2,?BG_HEIGHT - ?BASE_HEIGHT}).
 
-terminate(_Reason, _State = #graphics_state{}) ->
+terminate(_Reason, State = #graphics_state{}) ->
     io:format("killing graphics"),
     graphics_proxy!{kill,self()},
+    [gen_server:stop(PC)||PC<- State#graphics_state.pc_list],
+    gen_server:stop(learningFSM),
 %%    _State#graphics_state!{kill,self()},
     unregister(graphics_proxy),
-    exit("aahhh").
+    wxFrame:destroy(State#graphics_state.frame).
 
 createBitMaps() ->         % create bitmap to all images
     Rmap = wxImage:new("../Images/bg.png"),

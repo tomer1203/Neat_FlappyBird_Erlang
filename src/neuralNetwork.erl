@@ -112,11 +112,11 @@ simulation(info,{neuron_send, ActuatorPid, Value},State) when ActuatorPid =:= St
   NewState = State#nn_state{simulation = New_simulation_state},
 
   % TODO: REMOVE THIS SECTION OF CODE(IT SIMULATES A CRASH AND WE SHOULD OBVIOUSLY NOT INCLUDE THIS)
-  Random_Number = rand:uniform(),
-  if
-    Random_Number<0.00001 -> io:format("Simulating a network failure~n"),exit("oh no random happend");
-    true ->ok
-  end,
+%%  Random_Number = rand:uniform(),
+%%  if
+%%    Random_Number<0.00001 -> io:format("Simulating a network failure~n"),exit("oh no random happend");
+%%    true ->ok
+%%  end,
   %TODO: UP TO THIS POINT
 
   % send the current frame to graphics(only if you are subscribed to him)
@@ -156,7 +156,7 @@ evaluation(cast,{kill,PcPID},State) when PcPID =:= State#nn_state.pcPID ->
   {next_state, NextStateName, New_state};
 evaluation(cast,{keep,PcPID,Pipe_list,Sub2graph},State) when PcPID =:= State#nn_state.pcPID ->
   NextStateName = simulation,
-  io:format("keep~n"),
+%%  io:format("keep~n"),
   Simulation = simulation:initiate_simulation(Pipe_list),
   Features = simulation:feature_extraction(Simulation),
   send_to_sensors(Features, State#nn_state.sensorsPIDs),
@@ -177,8 +177,9 @@ handle_event(_EventType, _EventContent, _StateName, State = #nn_state{}) ->
 %% terminate. It should be the opposite of Module:init/1 and do any
 %% necessary cleaning up. When it returns, the gen_statem terminates with
 %% Reason. The return value is ignored.
-terminate(_Reason, _StateName, _State = #nn_state{}) ->
-  ok.
+terminate(_Reason, _StateName, State = #nn_state{}) ->
+  io:format("closed_network~n"),
+  State#nn_state.actuatorPID ! {kill,self()}.
 
 %% @private
 %% @doc Convert process state when code is changed
