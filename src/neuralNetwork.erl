@@ -67,31 +67,38 @@ state_name(_EventType, _EventContent, State = #nn_state{}) ->
   NextStateName = next_state,
   {next_state, NextStateName, State}.
 
-idle(cast,{start_simulation,Pc_PID,Genotype,Pipe_list,Sub2graph},State) when Pc_PID =:=State#nn_state.pcPID ->
-  %TODO- mutator.
 
-  if
-    State#nn_state.require_mutation =:= true ->
-      ok;
-%%      io:format("~p~n~p~n",[Genotype, digraph:vertices(Genotype)]),
-
-      %genotype:mutator(Genotype,?NUMBER_OF_MUTATION);
-      %TODO- send to pc the new genotype .
-    true                                     -> ok
-  end,
+idle(cast,{construct_simulation,Pc_PID,Genotype,Sub2graph},State) when Pc_PID =:=State#nn_state.pcPID ->
   Me = self(),
   Actuator_PID=spawn(fun()->construct_network(Genotype,Me)end),
 
-  New_stat=State#nn_state{pipList = Pipe_list,genotype = Genotype,actuatorPID=Actuator_PID,sub2graphics = Sub2graph},
-  {keep_state, New_stat};
+  New_state=State#nn_state{genotype = Genotype,actuatorPID=Actuator_PID,sub2graphics = Sub2graph},
+  {keep_state, New_state};
 
 idle(info,{finished_constructing, ActuatorPid, SensorsPIDs},State) when ActuatorPid =:= State#nn_state.actuatorPID ->
-  % initiate simulation
-  Simulation = simulation:initiate_simulation(State#nn_state.pipList),
-  Features = simulation:feature_extraction(Simulation),
-  send_to_sensors(Features, SensorsPIDs),
-  NewState = State#nn_state{simulation = Simulation,sensorsPIDs = SensorsPIDs},
-  {next_state, simulation, NewState}.
+  case State#nn_state.finish_and_start of
+    start_simulation ->
+      Simulation = simulation:initiate_simulation(State#nn_state.pipList),
+      Features = simulation:feature_extraction(Simulation),
+      send_to_sensors(Features, SensorsPIDs),
+      NewState = State#nn_state{simulation = Simulation,sensorsPIDs = SensorsPIDs,finish_and_start = wait},
+      {next_state, simulation, NewState};
+    _ -> NewState = State#nn_state{finish_and_start = finished_constructing,sensorsPIDs = SensorsPIDs},
+      {keep_state, NewState}
+  end;
+
+idle(cast,{start_simulation, Pc_PID, Pipe_list},State)  ->
+  case State#nn_state.finish_and_start of
+    finished_constructing ->
+      SensorsPIDs=State#nn_state.sensorsPIDs,
+      Simulation = simulation:initiate_simulation(Pipe_list),
+      Features = simulation:feature_extraction(Simulation),
+      send_to_sensors(Features, SensorsPIDs),
+      NewState = State#nn_state{simulation = Simulation,finish_and_start = wait},
+      {next_state, simulation, NewState};
+    _ -> NewState = State#nn_state{finish_and_start =start_simulation, pipList = Pipe_list},
+      {keep_state, NewState}
+  end.
 
 
 simulation(info,{neuron_send, ActuatorPid, Value},State) when ActuatorPid =:= State#nn_state.actuatorPID ->
@@ -142,7 +149,7 @@ evaluation(cast,{kill,PcPID},State) when PcPID =:= State#nn_state.pcPID ->
   {next_state, NextStateName, New_state};
 evaluation(cast,{keep,PcPID,Pipe_list,Sub2graph},State) when PcPID =:= State#nn_state.pcPID ->
   NextStateName = simulation,
-  %io:format("keep~n"),
+  io:format("keep~n"),
   Simulation = simulation:initiate_simulation(Pipe_list),
   Features = simulation:feature_extraction(Simulation),
   send_to_sensors(Features, State#nn_state.sensorsPIDs),

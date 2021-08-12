@@ -104,6 +104,7 @@
   actuatorPID,
   sensorsPIDs,
   simulation,
+  finish_and_start = wait,
   sub2graphics = false,
   require_mutation = false
 }).
