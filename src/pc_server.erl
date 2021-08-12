@@ -131,14 +131,18 @@ handle_cast({run_generation,From, Pipe_list}, State)->
       _ -> NewState=State#pc_server_state{generation=graphics, pipe_list = Pipe_list,remaining_networks = State#pc_server_state.number_of_networks}
   end,{noreply, NewState};
 
-handle_cast({network_down,_,Nn_Pid},State = #pc_server_state{gen_ets = Gen_ets,pc_num = PC_num,pipe_list = Pipes})->
+handle_cast({network_down,_,Nn_Pid},State = #pc_server_state{gen_ets = Gen_ets,fitness_ets = Fitness_ETS,pc_num = PC_num,pipe_list = Pipes})->
   io:format("network_down recognized starting restart~n"),
-  Gen = ets:lookup(Gen_ets,Nn_Pid),
+  [{_Key,Gen}] = ets:lookup(Gen_ets,Nn_Pid),
   ets:delete(Gen_ets,Nn_Pid),
+  ets:delete(Fitness_ETS,Nn_Pid),
+  Result = ets:lookup(Gen_ets,Nn_Pid),
+  io:format("Result of delete ~p ~n",[Result]),
   Self = self(),
   {ok,New_Nn_pid} = neuralNetwork:start(get_nn_name(PC_num,erlang:unique_integer()),Self),
   spawn(?MODULE, nn_monitor, [New_Nn_pid,Self]),
   ets:insert(Gen_ets,{New_Nn_pid,Gen}),
+  ets:insert(Fitness_ETS,{New_Nn_pid,0}),
   gen_statem:cast(New_Nn_pid,{start_simulation,self(),Gen,Pipes,true}),
   io:format("network restarted~n"),
   {noreply, State};

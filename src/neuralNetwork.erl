@@ -184,7 +184,6 @@ send_to_sensors(Features, SensorsPIDs)->
 
 % construct the neural network(genotype->phenotype), send to Network message:finished_constructing, then beaver like neuron.
 construct_network(G,NnPID)->
-  io:format("G is ~p ~n",[genotype:get_nodes(G)]),
   [Actuator]=genotype:get_actuator(G),
   SelfPID=self(),
   NumOfLayer=(Actuator#neuron.layer) - 1,
