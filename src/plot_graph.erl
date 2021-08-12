@@ -50,7 +50,7 @@ plotNode(Node,IODevice)->
     0->Bias = integer_to_list(Node#neuron.bias);
     _-> Bias = float_to_list(Node#neuron.bias,[{decimals,3}])
   end,
-  io:format(IODevice, "  ~p  [label=\"~p\\n~s\\nBias: ~s\\nLayer: ~p\",shape=circle,fillcolor=chartreuse1,style=filled,width=1,height=1,fixedsize=true];~n",[ID,Node#neuron.id,Label,Bias,Layer]).
+  io:format(IODevice, "  ~p  [label=\"~p\\n~s\\nBias: ~s\\nLayer: ~p\\nAF: ~p\",shape=circle,fillcolor=chartreuse1,style=filled,width=1,height=1,fixedsize=true];~n",[ID,Node#neuron.id,Label,Bias,AF,Layer]).
 to_dot(Graph, File) ->
   % open file
   {ok, IODevice} = file:open(File, [write]),

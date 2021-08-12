@@ -18,7 +18,7 @@
 -define(Timer,40).% Graphics Update Timer, default: 67
 
 % Bird Constants %
--define(BIRD_X_LOCATION,150).%230
+-define(BIRD_X_LOCATION,120).%230
 -define(BIRD_Y_LOCATION,400).% this is the starting y location
 -define(MAX_ROTATION,25).
 -define(ROT_VEL,10).
@@ -45,7 +45,8 @@
 
 % Genotype Constants %
 %-define(ACTIVATION_FUNCTION_LIST,[gaussian, tanh, cos, sin, sign, bin, trinary, multiquadric, absolute, linear, quadratic, gaussian, sqrt, log, sigmoid]).
--define(ACTIVATION_FUNCTION_LIST,[tanh,cos, sin, sign, bin]).
+-define(ACTIVATION_FUNCTION_LIST,[tanh]).
+%-define(ACTIVATION_FUNCTION_LIST,[tanh,cos, sin, sign, bin]).
 -define(NUMBER_OF_MUTATION, 3).
 
 -define(NUMBER_OF_SUBSCRIBED_BIRDS,100).

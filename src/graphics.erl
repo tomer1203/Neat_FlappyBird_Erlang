@@ -70,8 +70,8 @@ init([Pipes,PC_list]) ->
 %%    wxPanel:connect (Panel, left_down),
 %%    wxPanel:connect (Panel, right_down),
     wxFrame:connect(Frame, close_window),
-    wxButton:connect(Button, command_button_clicked, [{callback, fun handle_click/2}]),
-    wxButton:connect(Button2, command_button_clicked, [{callback, fun handle_click2/2}]),
+    wxButton:connect(Button, command_button_clicked),
+    %wxButton:connect(Button2, command_button_clicked, [{callback, fun handle_click2/2}]),
 
     % Generate random pipes
     [Pipe|Extras] = Pipes,
@@ -93,12 +93,17 @@ init([Pipes,PC_list]) ->
         current_bird_list = []}}.
 
 %%%-------------------------------------------------------------------
+
 handle_click(#wx{obj = Button},State) ->
     io:format("Start Button clicked~p~n",[State#graphics_state.pc_list]),
     NewState = State#graphics_state{super_graphics = true},
     {noreply, NewState}.
 handle_click2(#wx{obj = Button},_Event) ->
     io:format("Stop Button clicked~n").
+handle_event(#wx{obj = Button, event = #wxCommand{type = command_button_clicked}},State) ->
+    io:format("Start Button clicked~p~n",[State#graphics_state.pc_list]),
+    NewState = State#graphics_state{super_graphics = not State#graphics_state.super_graphics},
+    {noreply, NewState};
 handle_event(#wx{event = #wxClose{}},State = #graphics_state {frame = Frame}) -> % close window event
     io:format("Exiting\n"),
     wxWindow:destroy(Frame),
@@ -149,11 +154,12 @@ handle_info(timer, State=#graphics_state{frame = Frame,base_state = Base_locatio
         true ->
             if
                 State#graphics_state.simulation_finished =:= true ->
-%%                    PipeList = simulation:generate_pipes(?NUMBER_OF_PIPES),
-                    [H_pipe | T_pipes] =State#graphics_state.debug_const_pipe_list,
+                    PipeList = simulation:generate_pipes(?NUMBER_OF_PIPES),
+                    [H_pipe | T_pipes] =PipeList,
+%%                    [H_pipe | T_pipes] =State#graphics_state.debug_const_pipe_list,
                     NewState = State#graphics_state{simulation_finished = false, pipes_state = #pipes_graphics_rec{visible_pipeList = [H_pipe], extra_pipeList = T_pipes, used_pipeList = []}},
                     graphics_proxy ! {new_generation, ?NUMBER_OF_SUBSCRIBED_BIRDS},
-                    [gen_server:cast(PC, {run_generation, self(), State#graphics_state.debug_const_pipe_list}) || PC <- State#graphics_state.pc_list];
+                    [gen_server:cast(PC, {run_generation, self(), PipeList}) || PC <- State#graphics_state.pc_list];
 %%                    [gen_server:cast(PC, {run_generation, self(), PipeList}) || PC <- State#graphics_state.pc_list];
                 true -> NewState = State
             end,
