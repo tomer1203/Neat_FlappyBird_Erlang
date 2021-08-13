@@ -10,11 +10,11 @@
 
 %% CONSTANTS %%
 % Node Communication Constants %
--define(GRAPHICS_NODE,'pc1@10.0.2.15').
--define(PC1, 'pc1@10.0.2.15').
--define(PC2, 'pc2@10.0.2.15').
--define(PC3, 'pc3@10.0.2.15').
--define(PC4, 'pc4@10.0.2.15'). %132.72.104.
+-define(GRAPHICS_NODE,'pc1@tomer-VirtualBox').
+-define(PC1, 'pc1@tomer-VirtualBox').
+-define(PC2, 'pc2@tomer-VirtualBox').
+-define(PC3, 'pc3@tomer-VirtualBox').
+-define(PC4, 'pc4@tomer-VirtualBox'). %132.72.104.
 
 % World Constants %
 % these are not really used since the more accurate measurement is the actual graphics size
