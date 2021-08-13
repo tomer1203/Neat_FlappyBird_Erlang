@@ -44,6 +44,7 @@ start() ->
   {ok, State :: #lerningFSM_state{}} | {ok, State :: #lerningFSM_state{}, timeout() | hibernate} |
   {stop, Reason :: term()} | ignore).
 init([]) ->
+  process_flag(trap_exit, false),
   {ok, #lerningFSM_state{}}.
 
 %% @private

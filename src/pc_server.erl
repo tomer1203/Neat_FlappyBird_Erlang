@@ -47,6 +47,7 @@ start(Name,Pc_num,Learning_pid,Number_of_networks,Num_Layers,Num_Neurons_Per_Lay
   {ok, State :: #pc_server_state{}} | {ok, State :: #pc_server_state{}, timeout() | hibernate} |
   {stop, Reason :: term()} | ignore).
 init([Pc_num,Learning_pid,Number_of_networks,Num_Layers,Num_Neurons_Per_Layer]) ->
+  process_flag(trap_exit, false),
   %PID_genotype_map =#{},
   Networks = construct_networks(self(), Pc_num,Number_of_networks,Num_Layers,Num_Neurons_Per_Layer),
   %[maps:put(G,spawn_monitor(neuralNetwork:start_link()),PID_genotype_map)  || G <-Genotype_list],
@@ -166,8 +167,9 @@ handle_info(_Info, State = #pc_server_state{}) ->
 %% with Reason. The return value is ignored.
 -spec(terminate(Reason :: (normal | shutdown | {shutdown, term()} | term()),
     State :: #pc_server_state{}) -> term()).
-terminate(_Reason, _State = #pc_server_state{}) ->
-  ok.
+terminate(_Reason, _State = #pc_server_state{gen_ets = Gen_ETS}) ->io:format("closing Pc Server~n"),
+  Gen_list = ets:tab2list(Gen_ETS),
+  [gen_statem:stop(Network_pid)||{Network_pid,_Gen}<-Gen_list].
 
 %% @private
 %% @doc Convert process state when code is changed
@@ -185,7 +187,6 @@ construct_networks(PC_Pid,Pc_num,N,Num_Layers,Num_Neurons_Per_Layer)->
 
 construct_networks(_PC_Pid,_Pc_num,0,_Self,_Num_Layers,_Num_Neurons_Per_Layer,Acc)-> Acc;
 construct_networks(PC_Pid,Pc_num,N,Self,Num_Layers,Num_Neurons_Per_Layer,Acc)->
-  io:format("am i really here?~n"),
   G = genotype:test_Genotype(Num_Layers,Num_Neurons_Per_Layer),
   {ok,Proc} = neuralNetwork:start(get_nn_name(Pc_num,N),Self),
   spawn(?MODULE, nn_monitor, [Proc,PC_Pid]),

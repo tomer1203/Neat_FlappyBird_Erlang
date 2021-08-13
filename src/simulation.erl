@@ -79,7 +79,7 @@ feature_extraction(Simulation_State = #sim_state{})->
   Bird_Y_vel       = Simulation_State#sim_state.bird#bird_rec.vel,
   [First_pipe|R]       = Simulation_State#sim_state.visible_pipeList,
   Forward_pipe = if
-    First_pipe#pipe_rec.x +?PIPE_WIDTH + 20 < ?BIRD_X_LOCATION -> [F|_T]= R,io:format("switched_pipes~n"),F;
+    First_pipe#pipe_rec.x +?PIPE_WIDTH + 20 < ?BIRD_X_LOCATION -> [F|_T]= R,F;
     true                                                 -> First_pipe
   end,
   Distance_to_pipe = (Forward_pipe#pipe_rec.x - ?BIRD_X_LOCATION )/ ?BG_WIDTH,
@@ -171,7 +171,7 @@ simulate_a_frame(Simulation_State = #sim_state{},Jump)->
 
 bird_move(Bird,Jump,Tick_time)->
   {Vel,Jump_height} = case Jump of
-    true->  {-10.5,Bird#bird_rec.y};
+    true->  {?JUMP_VELOCITY,Bird#bird_rec.y};
     false-> {Bird#bird_rec.vel,Bird#bird_rec.jump_height}
   end,
   Displacement = Vel*Tick_time+0.5*(?GRAVITY)*math:pow(Tick_time,2),
@@ -222,7 +222,7 @@ world_collision_detection(Bird)->
 
 end_of_the_world_collision(Total_time)->
   if
-    Total_time > ?END_OF_THE_WORLD -> true;
+    Total_time > ?END_OF_THE_WORLD -> io:format("reached end of the world~n"),true;
     true                           -> false
   end.
 
