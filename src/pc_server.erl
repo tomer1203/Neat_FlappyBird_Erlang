@@ -48,7 +48,7 @@ start(Name,Pc_num,Learning_pid,Number_of_networks,Num_Layers,Num_Neurons_Per_Lay
   {stop, Reason :: term()} | ignore).
 init([Name,Pc_num,Learning_pid,Number_of_networks,Num_Layers,Num_Neurons_Per_Layer,Pc_Names, Name_to_atom]) ->
   %PID_genotype_map =#{},
-  Networks = construct_networks(self(), Pc_num,Number_of_networks,Num_Layers,Num_Neurons_Per_Layer),
+  Networks = construct_networks(Name, Pc_num,Number_of_networks,Num_Layers,Num_Neurons_Per_Layer),
   %[maps:put(G,spawn_monitor(neuralNetwork:start_link()),PID_genotype_map)  || G <-Genotype_list],
   %ets:insert(tableEx9, {K,V})
   Gen_ets = ets:new(gen_ets,[set]),
@@ -143,7 +143,7 @@ handle_cast({run_generation,From, Pipe_list}, State)->
       _ -> NewState=State#pc_server_state{generation=graphics, pipe_list = Pipe_list,remaining_networks = State#pc_server_state.number_of_networks}
   end,{noreply, NewState};
 
-handle_cast({network_down,_,Nn_Pid},State = #pc_server_state{gen_ets = Gen_ets,fitness_ets = Fitness_ETS,pc_num = PC_num,pipe_list = Pipes})->
+handle_cast({network_down,_,Nn_Pid},State = #pc_server_state{gen_ets = Gen_ets,fitness_ets = Fitness_ETS,pipe_list = Pipes,name = Name})->
   io:format("network_down recognized starting restart~n"),
   [{_Key,Gen}] = ets:lookup(Gen_ets,Nn_Pid),
   ets:delete(Gen_ets,Nn_Pid),
@@ -151,7 +151,7 @@ handle_cast({network_down,_,Nn_Pid},State = #pc_server_state{gen_ets = Gen_ets,f
   Result = ets:lookup(Gen_ets,Nn_Pid),
   io:format("Result of delete ~p ~n",[Result]),
   Self = self(),
-  {ok,New_Nn_pid} = neuralNetwork:start(get_nn_name(PC_num,erlang:unique_integer()),Self),
+  {ok,New_Nn_pid} = neuralNetwork:start(get_nn_name(Name,erlang:unique_integer()),Self),
   spawn(?MODULE, nn_monitor, [New_Nn_pid,Self]),
   ets:insert(Gen_ets,{New_Nn_pid,Gen}),
   ets:insert(Fitness_ETS,{New_Nn_pid,0}),
@@ -200,9 +200,9 @@ construct_networks(PC_Pid,Pc_num,N,Num_Layers,Num_Neurons_Per_Layer)->
 
 construct_networks(_PC_Pid,_Pc_num,0,_Self,_Num_Layers,_Num_Neurons_Per_Layer,Acc)-> Acc;
 construct_networks(PC_Pid,Pc_num,N,Self,Num_Layers,Num_Neurons_Per_Layer,Acc)->
-  io:format("am i really here?~n"),
+  %io:format("am i really here?~n"),
   G = genotype:test_Genotype(Num_Layers,Num_Neurons_Per_Layer),
-  {ok,Proc} = neuralNetwork:start(get_nn_name(Pc_num,N),Self),
+  {ok,Proc} = neuralNetwork:start(get_nn_name(PC_Pid,N),Self),
   spawn(?MODULE, nn_monitor, [Proc,PC_Pid]),
   construct_networks(PC_Pid,Pc_num,N-1,Self,Num_Layers,Num_Neurons_Per_Layer,[{Proc,G}|Acc]).
 
@@ -229,7 +229,7 @@ start_networks(Key,Pipes,Gen_ets)->
   Next_key = ets:next(Gen_ets,Key),
   start_networks(Next_key,Pipes,Gen_ets).
 
-get_nn_name(Pc_num,N)->list_to_atom(lists:append("nn_",integer_to_list(Pc_num*100+N))).
+get_nn_name(PC_Name,N)->list_to_atom(lists:append("nn_",lists:append(atom_to_list(PC_Name), integer_to_list(N)))).
 %put_and_send(G,PID,Map,Pipe_list) ->ok.
 
 % turn the keep list into a list of the networks to kill the networks to keep and which genotypes

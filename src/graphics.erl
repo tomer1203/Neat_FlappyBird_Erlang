@@ -40,7 +40,7 @@ initialize_system(N,Pipes)->
     io:format("initialize graphics pid= ~p~n",[self()]),
     {ok,Learning_pid} =  learningFSM:start_link(length(PC_List),PC_List,Pc_to_EtsAtom,N),
     % TODO: This will need to change to rpc call later
-    [pc_server:start(Pc,1,Learning_pid,N,2,5,PC_List,Pc_to_EtsAtom)|| Pc<-PC_List],
+    [pc_server:start(Pc,1,Learning_pid,round(N/length(PC_List)),2,5,PC_List,Pc_to_EtsAtom)|| Pc<-PC_List],
     [gen_server:cast(Pc,{start_simulation,self(),Pipes})||Pc<-PC_List].
 
 initialize_system_one_pc(PC_List,N,Pipes)->
@@ -138,6 +138,7 @@ handle_cast({new_generation},State=#graphics_state{})->
 
     % TODO: restart simulation
     NewState = State#graphics_state{ simulation_finished = true},
+
 %%    PipeList = simulation:generate_pipes(?NUMBER_OF_PIPES),
 %%    [H_pipe|T_pipes] = PipeList,
 %%    NewState = State#graphics_state{ pipes_state = #pipes_graphics_rec{visible_pipeList = [H_pipe],extra_pipeList = T_pipes,used_pipeList = []}},
@@ -146,7 +147,9 @@ handle_cast({new_generation},State=#graphics_state{})->
     % TODO: send to pc an ok message
     io:format("pc list ~p~n",[State#graphics_state.pc_list]),
 
-    {noreply, NewState}.
+    {noreply, NewState};
+handle_cast(Input,State)->
+    io:format("no fitting cast function Input= ~p ~n State= ~p~n",[Input,State]).
 %%handle_info({bird_update,_From,{Collide,Bird_loc}},State=#graphics_state{bird_list = BirdList})->
 %%    New_BirdList = queue:in({Collide,Bird_loc},BirdList),
 %%    NewState = State#graphics_state{bird_list = New_BirdList},
@@ -313,7 +316,7 @@ move_base(X)->X - ?X_VELOCITY.
 graphics_reduce(N)->graphics_reduce([],1,N,N).
 
 graphics_reduce(Bird_list,Frame_number,0,Next_N)->
-    wx_object:cast(graphics,{bird_locations,Bird_list}),
+    wx_object:cast({global, graphics},{bird_locations,Bird_list}),
     case Next_N of
         0 -> io:format("All birds Dead waiting for next generation~n"),
             wx_object:cast(graphics,{new_generation}),
