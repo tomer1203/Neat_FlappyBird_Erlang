@@ -83,7 +83,7 @@ feature_extraction(Simulation_State = #sim_state{})->
     true                                                 -> First_pipe
   end,
   Distance_to_pipe = (Forward_pipe#pipe_rec.x - ?BIRD_X_LOCATION )/ ?BG_WIDTH,
-  PipeHeight       = Forward_pipe#pipe_rec.height / ?BG_HEIGHT,
+  PipeHeight       = (Forward_pipe#pipe_rec.height + ?PIPE_GAP/2) / ?BG_HEIGHT,
   [Bird_Y, Bird_Y_vel, Distance_to_pipe, PipeHeight].
 simulate_pipes(Pipe_State = #pipes_graphics_rec{})->
   % move pipes
