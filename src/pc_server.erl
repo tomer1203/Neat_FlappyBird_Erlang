@@ -13,7 +13,7 @@
 -include("Constants.hrl").
 
 %% API
--export([start_link/7,start/7]).
+-export([start_link/8,start/8]).
 
 -export([nn_monitor/2]).
 
@@ -28,15 +28,15 @@ code_change/3]).
 %%%===================================================================
 
 %% @doc Spawns the server and registers the local name (unique)
--spec(start_link(Name::atom(),Pc_num::integer(), Learning_pid::pid(), Number_of_networks ::integer(),Num_Layers::integer(),Num_Neurons_Per_Layer::integer(),Neighbors_Ets_Map::term()) ->
-  {ok, Pid :: pid()} | ignore | {error, Reason :: term()}).
-start_link(Name,Pc_num, Learning_pid, Number_of_networks,Num_Layers,Num_Neurons_Per_Layer,Neighbors_Ets_Map) ->
-  gen_server:start_link({global, Name}, ?MODULE, [Name,Pc_num, Learning_pid, Number_of_networks,Num_Layers,Num_Neurons_Per_Layer,Neighbors_Ets_Map], []).
+%%-spec(start_link(Name::atom(),Pc_num::integer(), Learning_pid::pid(), Number_of_networks ::integer(),Num_Layers::integer(),Num_Neurons_Per_Layer::integer(),Neighbors_Ets_Map::term()) ->
+%%  {ok, Pid :: pid()} | ignore | {error, Reason :: term()}).
+start_link(Name,Pc_num, Learning_pid, Number_of_networks,Num_Layers,Num_Neurons_Per_Layer,Pc_Names, Name_to_atom) ->
+  gen_server:start_link({global, Name}, ?MODULE, [Name,Pc_num, Learning_pid, Number_of_networks,Num_Layers,Num_Neurons_Per_Layer,Pc_Names, Name_to_atom], []).
 
--spec(start(Name::atom(),Pc_num :: integer(),Learning_pid::pid(), Number_of_networks ::integer(),Num_Layers::integer(),Num_Neurons_Per_Layer::integer(),Neighbors_Ets_Map::term()) ->
-  {ok, Pid :: pid()} | ignore | {error, Reason :: term()}).
-start(Name,Pc_num,Learning_pid,Number_of_networks,Num_Layers,Num_Neurons_Per_Layer,Neighbors_Ets_Map) ->
-  gen_server:start({local, Name}, ?MODULE, [Name,Pc_num,Learning_pid,Number_of_networks,Num_Layers,Num_Neurons_Per_Layer,Neighbors_Ets_Map], []).
+%%-spec(start(Name::atom(),Pc_num :: integer(),Learning_pid::pid(), Number_of_networks ::integer(),Num_Layers::integer(),Num_Neurons_Per_Layer::integer(),Neighbors_Ets_Map::term()) ->
+%%  {ok, Pid :: pid()} | ignore | {error, Reason :: term()}).
+start(Name,Pc_num,Learning_pid,Number_of_networks,Num_Layers,Num_Neurons_Per_Layer,Pc_Names, Name_to_atom) ->
+  gen_server:start({global, Name}, ?MODULE, [Name,Pc_num,Learning_pid,Number_of_networks,Num_Layers,Num_Neurons_Per_Layer,Pc_Names, Name_to_atom], []).
 %%%===================================================================
 %%% gen_server callbacks
 %%%===================================================================
@@ -46,7 +46,7 @@ start(Name,Pc_num,Learning_pid,Number_of_networks,Num_Layers,Num_Neurons_Per_Lay
 -spec(init(N :: integer()) ->
   {ok, State :: #pc_server_state{}} | {ok, State :: #pc_server_state{}, timeout() | hibernate} |
   {stop, Reason :: term()} | ignore).
-init([Name,Pc_num,Learning_pid,Number_of_networks,Num_Layers,Num_Neurons_Per_Layer,Neighbors_Ets_Map]) ->
+init([Name,Pc_num,Learning_pid,Number_of_networks,Num_Layers,Num_Neurons_Per_Layer,Pc_Names, Name_to_atom]) ->
   %PID_genotype_map =#{},
   Networks = construct_networks(self(), Pc_num,Number_of_networks,Num_Layers,Num_Neurons_Per_Layer),
   %[maps:put(G,spawn_monitor(neuralNetwork:start_link()),PID_genotype_map)  || G <-Genotype_list],
@@ -55,9 +55,12 @@ init([Name,Pc_num,Learning_pid,Number_of_networks,Num_Layers,Num_Neurons_Per_Lay
   Fitness_ets = ets:new(fitness_ets,[set]),
   [ets:insert(Gen_ets,{Pid,Graph})||{Pid,Graph}<-Networks],
   sync_ets(Gen_ets,Learning_pid,Name),
+  Neighbors_map_ets= learningFSM:create_ets_map(Pc_Names,Name_to_atom,#{}),
+  % build neighbor ets
+
   {ok, #pc_server_state{name = Name,pc_num = Pc_num, learning_pid = Learning_pid,
     number_of_networks = Number_of_networks,gen_ets = Gen_ets,
-    fitness_ets = Fitness_ets, remaining_networks = Number_of_networks,neighbours_map_ets = Neighbors_Ets_Map}}.
+    fitness_ets = Fitness_ets, remaining_networks = Number_of_networks,neighbours_map_ets = Neighbors_map_ets}}.
 %% Neighbors_Ets_Map
 %% Pids -> empty ets
 %%

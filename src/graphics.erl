@@ -30,19 +30,29 @@
 %%    gen_statem:cast(Name,{start_simulation,self(),G,Pipes,true}).
 start(Name,C,N) ->
     Pipes = simulation:generate_pipes(?NUMBER_OF_PIPES),
-    Res = wx_object:start({local,?SERVER},?MODULE,[Pipes,[Name],C,N],[]),io:format("graphics pid= ~p~n",[Res]).
-initialize_system(PC_List,N,Pipes)->
-    [Name] = PC_List, % TODO: WHEN THERE ARE MULTIPLE COMPUTERS THIS WILL NEED TO CHANGE
-    %TODO: probably won't work with multiple nodes
+    Res = wx_object:start({global,?SERVER},?MODULE,[Pipes,[Name],C,N],[]),io:format("graphics pid= ~p~n",[Res]).
+initialize_system(N,Pipes)->
+    PC_List = [pc1,pc2,pc3,pc4],
+    Pc_to_EtsAtom = #{pc1=>pc1_ets,pc2=>pc2_ets,pc3=>pc3_ets,pc4=>pc4_ets},
+    Graphics_reduce_pid = spawn_link(graphics,graphics_reduce,[N]),
+    %TODO: might work with multiple nodes
+    register(graphics_proxy,Graphics_reduce_pid),
+    io:format("initialize graphics pid= ~p~n",[self()]),
+    {ok,Learning_pid} =  learningFSM:start_link(length(PC_List),PC_List,Pc_to_EtsAtom,N),
+    % TODO: This will need to change to rpc call later
+    [pc_server:start(Pc,1,Learning_pid,N,2,5,PC_List,Pc_to_EtsAtom)|| Pc<-PC_List],
+    [gen_server:cast(Pc,{start_simulation,self(),Pipes})||Pc<-PC_List].
+
+initialize_system_one_pc(PC_List,N,Pipes)->
+    [Name] = PC_List,
     Graphics_reduce_pid = spawn_link(graphics,graphics_reduce,[N]),
     register(graphics_proxy,Graphics_reduce_pid),
-    % TODO: start more than one pc
     io:format("initialize graphics pid= ~p~n",[self()]),
     {ok,Learning_pid} =  learningFSM:start_link(),
     pc_server:start(Name,1,Learning_pid,N,2,5),
     gen_server:cast(Name,{start_simulation,self(),Pipes}).
 init([Pipes,PC_list,C,N]) ->
-    initialize_system(PC_list,N,Pipes),
+    initialize_system(N,Pipes),
     % graphics
     WxServer = wx:new(),
     Frame = wxFrame:new(WxServer, ?wxID_ANY, "FLappy Bird", [{size,{?BG_WIDTH, ?BG_HEIGHT}}]),
@@ -50,8 +60,8 @@ init([Pipes,PC_list,C,N]) ->
     %DC=wxPaintDC:new(Panel),
     %Paint = wxBufferedPaintDC:new(Panel),
     % create bitmap to all images
-    Button = wxButton:new(Frame, ?wxID_ANY, [{label, "Start"}]),
-    Button2 = wxButton:new(Frame, ?wxID_ANY, [{label, "finish"}]),
+    Button = wxButton:new(Frame, 10, [{label, "Start"}]),
+    Button2 = wxButton:new(Frame, 11, [{label, "finish"}]),
     MainSizer = wxBoxSizer:new(?wxHORIZONTAL),
 
     UiSizer = wxBoxSizer:new(?wxVERTICAL),
@@ -73,7 +83,9 @@ init([Pipes,PC_list,C,N]) ->
 %%    wxPanel:connect (Panel, left_down),
 %%    wxPanel:connect (Panel, right_down),
     wxFrame:connect(Frame, close_window),
-    wxButton:connect(Button, command_button_clicked),
+    %wxButton:connect(Button, command_button_clicked),
+    wxWindow:connect(Panel, command_button_clicked),
+
     %wxButton:connect(Button2, command_button_clicked, [{callback, fun handle_click2/2}]),
 
     % Generate random pipes
@@ -103,8 +115,8 @@ handle_click(#wx{obj = Button},State) ->
     {noreply, NewState}.
 handle_click2(#wx{obj = Button},_Event) ->
     io:format("Stop Button clicked~n").
-handle_event(#wx{obj = Button, event = #wxCommand{type = command_button_clicked}},State) ->
-    io:format("Start Button clicked~p~n",[State#graphics_state.pc_list]),
+handle_event(#wx{id =ID,obj = Button, event = #wxCommand{type = command_button_clicked}},State) ->
+    io:format("Button clicked~p~n",[ID]),
     NewState = State#graphics_state{super_graphics = not State#graphics_state.super_graphics},
     {noreply, NewState};
 handle_event(#wx{event = #wxClose{}},State = #graphics_state {frame = Frame}) -> % close window event

@@ -112,16 +112,16 @@ simulation(info,{neuron_send, ActuatorPid, Value},State) when ActuatorPid =:= St
   NewState = State#nn_state{simulation = New_simulation_state},
 
   % TODO: REMOVE THIS SECTION OF CODE(IT SIMULATES A CRASH AND WE SHOULD OBVIOUSLY NOT INCLUDE THIS)
-  Random_Number = rand:uniform(),
-  if
-    Random_Number<0.00001 -> io:format("Simulating a network failure~n"),exit("oh no random happend");
-    true ->ok
-  end,
+%%  Random_Number = rand:uniform(),
+%%  if
+%%    Random_Number<0.00001 -> io:format("Simulating a network failure~n"),exit("oh no random happend");
+%%    true ->ok
+%%  end,
   %TODO: UP TO THIS POINT
 
   % send the current frame to graphics(only if you are subscribed to him)
   if
-    State#nn_state.sub2graphics =:= true -> graphics_proxy!{bird_update,self(),New_simulation_state#sim_state.total_time,{Collide,Bird_graphics}};
+    State#nn_state.sub2graphics =:= true -> {graphics_proxy,?GRAPHICS_NODE}!{bird_update,self(),New_simulation_state#sim_state.total_time,{Collide,Bird_graphics}};
     true                                 -> ok
   end,
 

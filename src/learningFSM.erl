@@ -11,28 +11,29 @@
 
 -behaviour(gen_server).
 
-%% API
--export([start_link/0,start/0]).
+-include("Constants.hrl").
 
+%% API
+-export([start_link/4,start/4]).
+-export([create_ets_map/3]).
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2,
   code_change/3]).
 
 -define(SERVER, ?MODULE).
 
--record(learningFSM_state, {ets_maps=#{},pc_names=[]}).
+-record(learningFSM_state, {number_of_pc = 4,ets_maps=#{},pc_names=[],fitness_list =[],number_of_nn = 100}).
 
 %%%===================================================================
 %%% API
 %%%===================================================================
 
 %% @doc Spawns the server and registers the local name (unique)
--spec(start_link() ->
-  {ok, Pid :: pid()} | ignore | {error, Reason :: term()}).
-start_link() ->
-  gen_server:start_link({local, ?SERVER}, ?MODULE, [], []).
-start() ->
-  gen_server:start({local, ?SERVER}, ?MODULE, [], []).
+
+start_link(Number_of_Pcs,Pc_Names, Name_to_atom,Number_of_networks) ->
+  gen_server:start_link({global, ?SERVER}, ?MODULE, [Number_of_Pcs, Pc_Names, Name_to_atom,Number_of_networks], []).
+start(Number_of_Pcs,Pc_Names, Name_to_atom,Number_of_networks) ->
+  gen_server:start({global, ?SERVER}, ?MODULE, [Number_of_Pcs, Pc_Names, Name_to_atom,Number_of_networks], []).
 
 %%%===================================================================
 %%% gen_server callbacks
@@ -45,8 +46,9 @@ start() ->
   {stop, Reason :: term()} | ignore).
 %%TODO - get a map from Pids to atom <1.32.2> -> pc1
 %% get list of pids!
-init([Pc_Names, Name_to_atom]) ->Map= create_ets_map(Pc_Names,Name_to_atom,#{}),
-  {ok, #learningFSM_state{pc_names = Pc_Names, ets_maps = Map}}.
+init([Number_of_Pcs, Pc_Names, Name_to_atom,Number_of_networks]) ->
+  Map= create_ets_map(Pc_Names,Name_to_atom,#{}),
+  {ok, #learningFSM_state{number_of_pc = Number_of_Pcs,pc_names = Pc_Names, ets_maps = Map, fitness_list = [],number_of_nn = Number_of_networks}}.
 
 %% @private
 %% @doc Handling call messages
@@ -67,8 +69,16 @@ handle_call(_Request, _From, State = #learningFSM_state{}) ->
   {noreply, NewState :: #learningFSM_state{}} |
   {noreply, NewState :: #learningFSM_state{}, timeout() | hibernate} |
   {stop, Reason :: term(), NewState :: #learningFSM_state{}}).
-handle_cast({network_evaluation,PC_PID,Fitness_list}, State = #learningFSM_state{}) ->
-  Keep_kill_List=top_genotypes(Fitness_list),gen_server:cast(PC_PID,{network_feedback,self(),Keep_kill_List}),{noreply, State};
+handle_cast({network_evaluation,PC_PID,Fitness_list}, State = #learningFSM_state{fitness_list = Acc_Fitness_list,number_of_pc = Number_of_pc,number_of_nn = Number_of_nn }) ->
+  All_Fitness_lists = lists:append(Fitness_list,Acc_Fitness_list),
+  New_Fitness_list =  case length(All_Fitness_lists) of
+    Number_of_pc->
+      Keep_List=top_genotypes(All_Fitness_lists,Number_of_nn),
+      gen_server:cast(PC_PID,{network_feedback,self(),Keep_List}),[];
+    _           -> All_Fitness_lists
+  end,
+
+  {noreply, State#learningFSM_state{fitness_list = New_Fitness_list}};
 
 handle_cast({update_generation,From,List_of_gen},State) ->
   Map_ets=State#learningFSM_state.ets_maps,
@@ -118,11 +128,17 @@ code_change(_OldVsn, State = #learningFSM_state{}, _Extra) ->
 %%%===================================================================
 
 % sort from worst to the best
-top_genotypes(FitList)->
-  SortedFitList=lists:sort(fun({KeyA,ValA}, {KeyB,ValB}) -> {ValA,KeyA} >= {ValB,KeyB} end, FitList),make_keep_kill_List(SortedFitList,length(SortedFitList),[]).
-make_keep_kill_List(_ ,0 ,List) -> List;
-make_keep_kill_List([{PID,_}|T], N ,List) when N =< 75 -> make_keep_kill_List(T, N-1 ,List ++[{PID,0,false}]);
-make_keep_kill_List([{PID,_}|T], N ,List) when N > 75 -> make_keep_kill_List(T, N-1 ,List ++[{PID,4,true}]).%TODO: CHANGE TO BACK RECURSION
+top_genotypes(FitList,Number_of_networks)->
+  SortedFitList=lists:sort(fun({KeyA,ValA}, {KeyB,ValB}) -> {ValA,KeyA} >= {ValB,KeyB} end, FitList),
+  make_keep_List(SortedFitList,length(SortedFitList),[],Number_of_networks).
+
+%%make_keep_kill_List(_ ,0 ,List) -> List;
+%%make_keep_kill_List([{PID,_}|T], N ,List) when N =< 75 -> make_keep_kill_List(T, N-1 ,List ++[{PID,0,false}]);
+%%make_keep_kill_List([{PID,_}|T], N ,List) when N > 75 -> make_keep_kill_List(T, N-1 ,List ++[{PID,4,true}]).%TODO: CHANGE TO BACK RECURSION
+
+make_keep_List(_ ,0 ,List,_Number_of_networks) -> List;
+make_keep_List([{_PID,_}|T], N ,List,Number_of_networks) when N =< round((?DIVIDE_BY-1)*Number_of_networks/?DIVIDE_BY) -> make_keep_List(T, N-1 ,List,Number_of_networks);
+make_keep_List([{PID,_}|T], N ,List,Number_of_networks) when N > round((?DIVIDE_BY-1)*Number_of_networks/?DIVIDE_BY) -> make_keep_List(T, N-1 ,List ++[{PID,true}],Number_of_networks).%TODO: CHANGE TO BACK RECURSION
 
 % get ets and list and enter all the element from the list to the ets.
 update_ets(_,[]) -> ok;

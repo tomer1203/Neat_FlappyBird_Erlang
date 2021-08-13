@@ -9,10 +9,13 @@
 -author("tomer").
 
 %% CONSTANTS %%
+% Node Communication Constants %
+-define(GRAPHICS_NODE,'pc1@132.72.104.').
 -define(PC1, 'pc1@132.72.104.').
 -define(PC2, 'pc2@132.72.104.').
 -define(PC3, 'pc3@132.72.104.').
 -define(PC4, 'pc4@132.72.104.').
+
 % World Constants %
 % these are not really used since the more accurate measurement is the actual graphics size
 -define(WIN_WIDTH,600).
@@ -50,10 +53,10 @@
 % Genotype Constants %
 %-define(ACTIVATION_FUNCTION_LIST,[gaussian, tanh, cos, sin, sign, bin, trinary, multiquadric, absolute, linear, quadratic, gaussian, sqrt, log, sigmoid]).
 -define(ACTIVATION_FUNCTION_LIST,[tanh]).
-%-define(ACTIVATION_FUNCTION_LIST,[tanh,cos, sin, sign, bin]).
 -define(NUMBER_OF_MUTATION, 3).
 
 -define(NUMBER_OF_SUBSCRIBED_BIRDS,100).
+-define(DIVIDE_BY,4). % controls how many survive for example for divide by 4 and 100 nn you get 25 survive and 75 dead
 
 %% SIMULATION RECORDS %%
 -record(pipe_rec,{height,x,passed}).
