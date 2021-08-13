@@ -114,16 +114,16 @@ handle_cast({network_feedback,From,TopGens}, State = #pc_server_state{name = Pc_
   % get list of all available networks(the ones that were killed), a list of the networks to keep and a list of the genotypes to mutate
   [{Pid,_,_Fit}|_T] = TopGens,
   [{_K,G}] = ets:lookup(Gen_ets,Pid),
-  {KeepList,KillList,MutateList} = parseKeepList(Gen_ets,TopGens),
-  send_kill(KillList,Gen_ets),
-  mutate_and_restart_networks(KillList,MutateList,Gen_ets,State#pc_server_state.pipe_list),
+  {Keep_map,Mutate_list} = parseKeepList(Gen_ets,State#pc_server_state.neighbours_map_ets,TopGens),
+  {Kill_PID_List,Keep_PID_list}=mutate_and_restart_networks(Keep_map,Mutate_list,Gen_ets,State#pc_server_state.pipe_list),
+  send_kill(Kill_PID_List,Gen_ets),
   spawn(fun()->sync_ets(Gen_ets,Learning_FSM_Pid,Pc_Name)end),
   case State#pc_server_state.generation of
     graphics->
-      send_keep(KeepList,State#pc_server_state.pipe_list),
-      start_simulation_kill(KillList,State#pc_server_state.pipe_list),
+      send_keep(Keep_PID_list,State#pc_server_state.pipe_list),
+      start_simulation_kill(Keep_PID_list,State#pc_server_state.pipe_list),
       NewState=State#pc_server_state{generation=wait};
-      _ -> NewState=State#pc_server_state{generation=mutation, keep_list = {KeepList,KillList,MutateList}} % TODO- function start simulation, mutate, update ets ! !
+      _ -> NewState=State#pc_server_state{generation=mutation, keep_list = {Keep_PID_list,Keep_PID_list}} % TODO- function start simulation, mutate, update ets ! !
   end,{noreply, NewState};
 
 % from graphics
@@ -231,32 +231,47 @@ get_nn_name(Pc_num,N)->list_to_atom(lists:append("nn_",integer_to_list(Pc_num*10
 
 % turn the keep list into a list of the networks to kill the networks to keep and which genotypes
 % to mutate and how many times. the sum of the mutate list should be equal to the dead networks.
-parseKeepList(Gen_ets,KeepList)->parseKeepList(Gen_ets,KeepList,[],[],[]).
-parseKeepList(_Gen_ets,[],KeepAcc,KillAcc,MutateAcc)->{KeepAcc,KillAcc,MutateAcc};
-parseKeepList(Gen_ets,[{NetworkPid,Keep,Subscribe}|KeepList],KeepAcc,KillAcc,MutateAcc)->
-  case Keep of
-    0 -> % kill network
-      parseKeepList(Gen_ets,KeepList,KeepAcc,[NetworkPid|KillAcc],MutateAcc);
-    1 -> % keep but don't mutate
-      parseKeepList(Gen_ets,KeepList,[{NetworkPid,Subscribe}|KeepAcc],KillAcc,MutateAcc);
-    N -> % keep and mutate N-1 times(keep once)
-      case ets:lookup(Gen_ets,NetworkPid) of
-          []-> io:format("ETS:LOOKUP FAILED: NetworkPid= ~p, ETS length=~p,~nETS=~p~n",[NetworkPid,length(ets:tab2list(Gen_ets)), ets:tab2list(Gen_ets)]);
-          _->ok
-      end,
+parseKeepList(Gen_ets,Ets_map_neighbours,KeepList)->parseKeepList(Gen_ets,Ets_map_neighbours,KeepList,#{},[]).
+parseKeepList(_Gen_ets,_Ets_map_neighbours,[],KeepAcc,MutateAcc)->{KeepAcc,MutateAcc};
+parseKeepList(Gen_ets,Ets_map_neighbours,[{NetworkPid,_Subscribe}|KeepList],KeepAcc,MutateAcc)->
+  case ets:lookup(Gen_ets,NetworkPid) of
+%%    0 -> % kill network
+%%      %parseKeepList(Gen_ets,Ets_map_neighbours,KeepList,KeepAcc,[NetworkPid|KillAcc],MutateAcc);
+    [{Key,G}] -> % keep but don't mutate
+      parseKeepList(Gen_ets,Ets_map_neighbours,KeepList,maps:put(Key,G,KeepAcc),MutateAcc);
+    [] -> New_gen = ets_lookup_neighbours(NetworkPid,Ets_map_neighbours),
+      parseKeepList(Gen_ets,Ets_map_neighbours,KeepList,KeepAcc,[New_gen|MutateAcc])% keep and mutate N-1 times(keep once)
+    end.
 
-      [{Key,Gen}] = ets:lookup(Gen_ets,NetworkPid),
-      parseKeepList(Gen_ets,KeepList,[{NetworkPid,Subscribe}|KeepAcc],KillAcc,[{Gen,N-1}|MutateAcc])
+%%mutate_and_restart_networks([],[],_Gen_ets,_PipeList)->ok;
+%%mutate_and_restart_networks(KillList,[{_Gen,0}|MutateList],Gen_ets,PipeList)->mutate_and_restart_networks(KillList,MutateList,Gen_ets,PipeList);
+%%mutate_and_restart_networks([],MutateList,Gen_ets,_PipeList)->
+%%  exit(lists:flatten(io_lib:format("there are more mutations than networks to put them in ~p~p", [MutateList,Gen_ets])));
+%%mutate_and_restart_networks(KillList,[],Gen_ets,PipeList)->exit("there are more dead networks than mutations to put in them");
+%%mutate_and_restart_networks([NetworkPid|KillList],[{Gen,N}|MutateList],Gen_ets,PipeList)->
+%%  assignGenToNetwork(NetworkPid,Gen,Gen_ets),
+%%  mutate_and_restart_networks(KillList,[{Gen,N-1}|MutateList],Gen_ets,PipeList).
+
+
+
+
+mutate_and_restart_networks(KeepMap,MutateList,Gen_ets,_PipeList) -> mutate_and_restart_networks(KeepMap,MutateList,Gen_ets,ets:tab2list(Gen_ets),_PipeList,[],[]).
+mutate_and_restart_networks(KeepMap,MutateList,Gen_ets,[],_PipeList,Kill_PID_List,Keep_PID_list) -> case MutateList of
+                                                                          [] -> {Kill_PID_List,Keep_PID_list};
+                                                                          _ -> exit("mutate list is not empty")
+                                                                        end;
+mutate_and_restart_networks(KeepMap,[G|T_gens],Gen_ets, [{Key,_Genotype}|T_ets],_PipeList,Kill_List,Keep_list) ->
+  case maps:is_key(Key,KeepMap) of
+    false ->
+      ets:delete(Key,Gen_ets),
+      assignGenToNetwork(Key,G,Gen_ets),
+      % TODO send start message
+      mutate_and_restart_networks(KeepMap,T_gens,Gen_ets,T_ets,_PipeList,[Key|Kill_List],Keep_list);
+    true ->
+      % TODO send message start
+      mutate_and_restart_networks(maps:remove(Key,KeepMap),[G|T_gens],Gen_ets,T_ets,_PipeList,Kill_List,[Key|Keep_list])
   end.
 
-mutate_and_restart_networks([],[],_Gen_ets,_PipeList)->ok;
-mutate_and_restart_networks(KillList,[{_Gen,0}|MutateList],Gen_ets,PipeList)->mutate_and_restart_networks(KillList,MutateList,Gen_ets,PipeList);
-mutate_and_restart_networks([],MutateList,Gen_ets,_PipeList)->
-  exit(lists:flatten(io_lib:format("there are more mutations than networks to put them in ~p~p", [MutateList,Gen_ets])));
-mutate_and_restart_networks(KillList,[],Gen_ets,PipeList)->exit("there are more dead networks than mutations to put in them");
-mutate_and_restart_networks([NetworkPid|KillList],[{Gen,N}|MutateList],Gen_ets,PipeList)->
-  assignGenToNetwork(NetworkPid,Gen,Gen_ets),
-  mutate_and_restart_networks(KillList,[{Gen,N-1}|MutateList],Gen_ets,PipeList).
 
 assignGenToNetwork(NetworkPid,Gen,Gen_ets)->
   % Copy gen
@@ -295,8 +310,15 @@ update_ets(List_of_gen,Neighbor,Neighbors_Ets_map)->
   ets:delete_all_objects(Gen_ets),
   [ets:insert(Gen_ets,{NetPid,deserialize(Flat_Gen)}) ||{NetPid,Flat_Gen}<-List_of_gen].
 
-
-
+ % search in the all the ets of the neighbours is the gen is exist
+ets_lookup_neighbours(Network_PID,Neighbours_map_ets) -> 
+  Ets_list = maps:to_list(Neighbours_map_ets),
+  case ets:lookup(hd(Ets_list),Network_PID) of
+    []-> ets_lookup_neighbours(Network_PID,maps:remove(hd(Ets_list),Neighbours_map_ets));
+    [{_Key,Gen}] -> Gen;
+    G -> exit(lists:flatten(io_lib:format("The gen is not in neighbours ets ! ~p~n",[G])))
+  end .
+  
 
 
 serialize({digraph, V, E, N, B}) ->
