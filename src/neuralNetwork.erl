@@ -41,6 +41,7 @@ start(Name,PC_PID) ->
 %% gen_statem:start_link/[3,4], this function is called by the new
 %% process to initialize.
 init([PC_PID]) ->
+  io:format("NN UP~n"),
   {ok, idle, #nn_state{pcPID = PC_PID}}.
 
 %% @private
@@ -121,7 +122,9 @@ simulation(info,{neuron_send, ActuatorPid, Value},State) when ActuatorPid =:= St
 
   % send the current frame to graphics(only if you are subscribed to him)
   if
-    State#nn_state.sub2graphics =:= true -> io:format("got to nn send to graphics~n"),rpc:call(?GRAPHICS_NODE,graphics,graphics_reduce_rpc,[{bird_update,self(),New_simulation_state#sim_state.total_time,{Collide,Bird_graphics}}]);
+    State#nn_state.sub2graphics =:= true ->
+      io:format("got to nn send to graphics from node ~p~n",[node()]),
+      rpc:call(?GRAPHICS_NODE,graphics,graphics_reduce_rpc,[{bird_update,self(),New_simulation_state#sim_state.total_time,{Collide,Bird_graphics}}]);
     true                                 -> ok
   end,
 

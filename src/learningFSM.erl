@@ -15,6 +15,7 @@
 
 %% API
 -export([start_link/4,start/4]).
+-export([lfsm_rpc/1]).
 -export([create_ets_map/3]).
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2,
@@ -31,9 +32,9 @@
 %% @doc Spawns the server and registers the local name (unique)
 
 start_link(Number_of_Pcs,Pc_Names, Name_to_atom,Number_of_networks) ->
-  gen_server:start_link({global, ?SERVER}, ?MODULE, [Number_of_Pcs, Pc_Names, Name_to_atom,Number_of_networks], []).
+  gen_server:start_link({local, ?SERVER}, ?MODULE, [Number_of_Pcs, Pc_Names, Name_to_atom,Number_of_networks], []).
 start(Number_of_Pcs,Pc_Names, Name_to_atom,Number_of_networks) ->
-  gen_server:start({global, ?SERVER}, ?MODULE, [Number_of_Pcs, Pc_Names, Name_to_atom,Number_of_networks], []).
+  gen_server:start({local, ?SERVER}, ?MODULE, [Number_of_Pcs, Pc_Names, Name_to_atom,Number_of_networks], []).
 
 %%%===================================================================
 %%% gen_server callbacks
@@ -71,6 +72,7 @@ handle_call(_Request, _From, State = #learningFSM_state{}) ->
   {noreply, NewState :: #learningFSM_state{}, timeout() | hibernate} |
   {stop, Reason :: term(), NewState :: #learningFSM_state{}}).
 handle_cast({network_evaluation,PC_PID,Fitness_list}, State = #learningFSM_state{fitness_list = Acc_Fitness_list,number_of_pc = Number_of_pc,number_of_nn = Number_of_nn }) ->
+  io:format("got network evaluation function~n"),
   All_Fitness_lists = lists:append(Fitness_list,Acc_Fitness_list),
   New_Fitness_list =  case length(All_Fitness_lists) of
     Number_of_pc->
@@ -154,3 +156,5 @@ create_ets_map([],_,Map)->Map;
 create_ets_map([H|T],Name_to_atom,Map)->Pc_ets = ets:new(maps:get(H,Name_to_atom),[set]),
   New_map=maps:put(H,Pc_ets,Map), create_ets_map(T,Name_to_atom,New_map).
 
+lfsm_rpc(Message)->io:format("Learning_fsm rpc call~n"),
+  gen_server:cast(learningFSM,Message).
