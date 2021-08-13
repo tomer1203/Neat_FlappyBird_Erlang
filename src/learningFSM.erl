@@ -47,6 +47,7 @@ start(Number_of_Pcs,Pc_Names, Name_to_atom,Number_of_networks) ->
 %%TODO - get a map from Pids to atom <1.32.2> -> pc1
 %% get list of pids!
 init([Number_of_Pcs, Pc_Names, Name_to_atom,Number_of_networks]) ->
+  io:format("LFSM UP~n"),
   Map= create_ets_map(Pc_Names,Name_to_atom,#{}),
   {ok, #learningFSM_state{number_of_pc = Number_of_Pcs,pc_names = Pc_Names, ets_maps = Map, fitness_list = [],number_of_nn = Number_of_networks}}.
 

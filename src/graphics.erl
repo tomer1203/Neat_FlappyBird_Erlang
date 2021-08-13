@@ -14,6 +14,7 @@
 -include_lib("wx/include/wx.hrl").
 -include("Constants.hrl").
 -export([start/3]).
+-export([test_rpc/0,graphics_rpc/1,graphics_reduce_rpc/1]).
 -export([init/1,handle_event/2,handle_sync_event/3,handle_info/2,handle_cast/2,terminate/2]).
 -export([graphics_reduce/1]).
 
@@ -30,9 +31,10 @@
 %%    gen_statem:cast(Name,{start_simulation,self(),G,Pipes,true}).
 start(Name,C,N) ->
     Pipes = simulation:generate_pipes(?NUMBER_OF_PIPES),
-    Res = wx_object:start({global,?SERVER},?MODULE,[Pipes,[Name],C,N],[]),io:format("graphics pid= ~p~n",[Res]).
+    Res = wx_object:start({local,?SERVER},?MODULE,[Pipes,[Name],C,N],[]),io:format("graphics pid= ~p~n",[Res]).
 initialize_system(N,Pipes)->
     PC_List = [pc1,pc2,pc3,pc4],
+    PC_List2 = [{pc1,1},{pc2,2},{pc3,3},{pc4,4}],
     Pc_to_EtsAtom = #{pc1=>pc1_ets,pc2=>pc2_ets,pc3=>pc3_ets,pc4=>pc4_ets},
     Graphics_reduce_pid = spawn_link(graphics,graphics_reduce,[N]),
     %TODO: might work with multiple nodes
@@ -40,18 +42,29 @@ initialize_system(N,Pipes)->
     io:format("initialize graphics pid= ~p~n",[self()]),
     {ok,Learning_pid} =  learningFSM:start_link(length(PC_List),PC_List,Pc_to_EtsAtom,N),
     % TODO: This will need to change to rpc call later
-    [pc_server:start(Pc,1,Learning_pid,round(N/length(PC_List)),2,5,PC_List,Pc_to_EtsAtom)|| Pc<-PC_List],
-    [gen_server:cast(Pc,{start_simulation,self(),Pipes})||Pc<-PC_List].
+    pc_server:start(pc1,1,Learning_pid,round(N/length(PC_List)),2,5,PC_List,Pc_to_EtsAtom),
+    pc_server:start(pc2,2,Learning_pid,round(N/length(PC_List)),2,5,PC_List,Pc_to_EtsAtom),
+    pc_server:start(pc3,3,Learning_pid,round(N/length(PC_List)),2,5,PC_List,Pc_to_EtsAtom),
+    pc_server:start(pc4,4,Learning_pid,round(N/length(PC_List)),2,5,PC_List,Pc_to_EtsAtom),
+%%    [pc_server:start(Pc,Pc_num,Learning_pid,round(N/length(PC_List)),2,5,PC_List,Pc_to_EtsAtom)|| {Pc,Pc_num}<-PC_List2],
+    rpc:call(?PC1, pc_server,pc_rpc,[pc1,{start_simulation,self(),Pipes}]),
+    rpc:call(?PC2, pc_server,pc_rpc,[pc2,{start_simulation,self(),Pipes}]),
+    rpc:call(?PC3, pc_server,pc_rpc,[pc3,{start_simulation,self(),Pipes}]),
+    rpc:call(?PC4, pc_server,pc_rpc,[pc4,{start_simulation,self(),Pipes}]).
+%%    rpc:call(?PC1, pc_server,pc_server:pc_rpc(pc2,{start_simulation,self(),Pipes}))
+%%    [rpc:call(?PC1, pc_server,pc_server:pc_rpc(Pc,{start_simulation,self(),Pipes}))||Pc<-PC_List].
+%%    [gen_server:cast(Pc,{start_simulation,self(),Pipes})||Pc<-PC_List].
 
-initialize_system_one_pc(PC_List,N,Pipes)->
-    [Name] = PC_List,
-    Graphics_reduce_pid = spawn_link(graphics,graphics_reduce,[N]),
-    register(graphics_proxy,Graphics_reduce_pid),
-    io:format("initialize graphics pid= ~p~n",[self()]),
-    {ok,Learning_pid} =  learningFSM:start_link(),
-    pc_server:start(Name,1,Learning_pid,N,2,5),
-    gen_server:cast(Name,{start_simulation,self(),Pipes}).
+%%initialize_system_one_pc(PC_List,N,Pipes)->
+%%    [Name] = PC_List,
+%%    Graphics_reduce_pid = spawn_link(graphics,graphics_reduce,[N]),
+%%    register(graphics_proxy,Graphics_reduce_pid),
+%%    io:format("initialize graphics pid= ~p~n",[self()]),
+%%    {ok,Learning_pid} =  learningFSM:start_link(),
+%%    pc_server:start(Name,1,Learning_pid,N,2,5),
+%%    gen_server:cast(Name,{start_simulation,self(),Pipes}).
 init([Pipes,PC_list,C,N]) ->
+    io:format("init: my node is: ~p~n",[node()]),
     initialize_system(N,Pipes),
     % graphics
     WxServer = wx:new(),
@@ -128,6 +141,7 @@ handle_event(#wx{event = #wxClose{}},State = #graphics_state {frame = Frame}) ->
 
 % the locations of all birds in the last iteration
 handle_cast({bird_locations,Bird_List},State=#graphics_state{bird_queue = Bird_queue})->
+    io:format("got back locations~p~n",[Bird_List]),
     New_bird_queue = queue:in(Bird_List,Bird_queue),
     NewState = State#graphics_state{bird_queue = New_bird_queue},
     {noreply, NewState};
@@ -149,7 +163,7 @@ handle_cast({new_generation},State=#graphics_state{})->
 
     {noreply, NewState};
 handle_cast(Input,State)->
-    io:format("no fitting cast function Input= ~p ~n State= ~p~n",[Input,State]).
+    io:format("no fitting cast function Input= ~p ~n State= ~p~n",[Input,State]),{noreply, State}.
 %%handle_info({bird_update,_From,{Collide,Bird_loc}},State=#graphics_state{bird_list = BirdList})->
 %%    New_BirdList = queue:in({Collide,Bird_loc},BirdList),
 %%    NewState = State#graphics_state{bird_list = New_BirdList},
@@ -316,9 +330,11 @@ move_base(X)->X - ?X_VELOCITY.
 graphics_reduce(N)->graphics_reduce([],1,N,N).
 
 graphics_reduce(Bird_list,Frame_number,0,Next_N)->
-    wx_object:cast({global, graphics},{bird_locations,Bird_list}),
+    io:format("my node is: ~p~n",[node()]),
+%%    wx_object:cast({global, graphics},{bird_locations,Bird_list}),
+    rpc:call(?GRAPHICS_NODE,graphics,graphics_rpc,[{bird_locations,Bird_list}]),
     case Next_N of
-        0 -> io:format("All birds Dead waiting for next generation~n"),
+    0 -> io:format("All birds Dead waiting for next generation~n"),
             wx_object:cast(graphics,{new_generation}),
             receive
                 {new_generation,New_N}->io:format("restarting graphics~n"), graphics_reduce([],1,New_N,New_N)
@@ -351,3 +367,11 @@ flush_messages() ->
     after 0 ->
         ok
     end.
+graphics_rpc(Pass2Graphics)->
+    wx_object:cast(graphics,Pass2Graphics).
+
+graphics_reduce_rpc(Pass2GraphicsReduce)->
+    io:format("got a bird update"),
+    graphics_proxy!Pass2GraphicsReduce.
+test_rpc()->
+    io:format("RPC WORKS! ~n").

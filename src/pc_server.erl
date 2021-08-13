@@ -14,7 +14,7 @@
 
 %% API
 -export([start_link/8,start/8]).
-
+-export([pc_rpc/2]).
 -export([nn_monitor/2]).
 
 %% gen_server callbacks
@@ -31,12 +31,12 @@ code_change/3]).
 %%-spec(start_link(Name::atom(),Pc_num::integer(), Learning_pid::pid(), Number_of_networks ::integer(),Num_Layers::integer(),Num_Neurons_Per_Layer::integer(),Neighbors_Ets_Map::term()) ->
 %%  {ok, Pid :: pid()} | ignore | {error, Reason :: term()}).
 start_link(Name,Pc_num, Learning_pid, Number_of_networks,Num_Layers,Num_Neurons_Per_Layer,Pc_Names, Name_to_atom) ->
-  gen_server:start_link({global, Name}, ?MODULE, [Name,Pc_num, Learning_pid, Number_of_networks,Num_Layers,Num_Neurons_Per_Layer,Pc_Names, Name_to_atom], []).
+  gen_server:start_link({local, Name}, ?MODULE, [Name,Pc_num, Learning_pid, Number_of_networks,Num_Layers,Num_Neurons_Per_Layer,Pc_Names, Name_to_atom], []).
 
 %%-spec(start(Name::atom(),Pc_num :: integer(),Learning_pid::pid(), Number_of_networks ::integer(),Num_Layers::integer(),Num_Neurons_Per_Layer::integer(),Neighbors_Ets_Map::term()) ->
 %%  {ok, Pid :: pid()} | ignore | {error, Reason :: term()}).
 start(Name,Pc_num,Learning_pid,Number_of_networks,Num_Layers,Num_Neurons_Per_Layer,Pc_Names, Name_to_atom) ->
-  gen_server:start({global, Name}, ?MODULE, [Name,Pc_num,Learning_pid,Number_of_networks,Num_Layers,Num_Neurons_Per_Layer,Pc_Names, Name_to_atom], []).
+  gen_server:start({local, Name}, ?MODULE, [Name,Pc_num,Learning_pid,Number_of_networks,Num_Layers,Num_Neurons_Per_Layer,Pc_Names, Name_to_atom], []).
 %%%===================================================================
 %%% gen_server callbacks
 %%%===================================================================
@@ -47,6 +47,7 @@ start(Name,Pc_num,Learning_pid,Number_of_networks,Num_Layers,Num_Neurons_Per_Lay
   {ok, State :: #pc_server_state{}} | {ok, State :: #pc_server_state{}, timeout() | hibernate} |
   {stop, Reason :: term()} | ignore).
 init([Name,Pc_num,Learning_pid,Number_of_networks,Num_Layers,Num_Neurons_Per_Layer,Pc_Names, Name_to_atom]) ->
+  io:format("PC UP~n"),
   %PID_genotype_map =#{},
   Networks = construct_networks(Name, Pc_num,Number_of_networks,Num_Layers,Num_Neurons_Per_Layer),
   %[maps:put(G,spawn_monitor(neuralNetwork:start_link()),PID_genotype_map)  || G <-Genotype_list],
@@ -89,6 +90,7 @@ handle_call(_Request, _From, State = #pc_server_state{}) ->
 
 
 handle_cast({start_simulation,_From,Pipe_list}, State = #pc_server_state{gen_ets = Gen_ets})->
+  io:format("starting Pc ~p simulation~n",[State#pc_server_state.name]),
   First_key = ets:first(Gen_ets),
   start_networks(First_key,Pipe_list,Gen_ets),
   {noreply, State#pc_server_state{pipe_list = Pipe_list}};
@@ -160,7 +162,7 @@ handle_cast({network_down,_,Nn_Pid},State = #pc_server_state{gen_ets = Gen_ets,f
   {noreply, State};
 
 
-handle_cast(_Request, State = #pc_server_state{}) ->
+handle_cast(_Request, State = #pc_server_state{}) ->io:format("oh no pc message does not fit ~p ~n",[_Request]),
   {noreply, State}.
 
 %% @private
@@ -342,3 +344,6 @@ deserialize({VL, EL, NL, B}) ->
   ets:insert(E, EL),
   ets:insert(N, NL),
   DG.
+
+pc_rpc(Pc,Message)->io:format("reached Pc rpc with message ~p~n",[Message]),
+  gen_server:cast(Pc,Message).
