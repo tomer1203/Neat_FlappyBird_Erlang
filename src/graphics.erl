@@ -141,7 +141,7 @@ handle_event(#wx{event = #wxClose{}},State = #graphics_state {frame = Frame}) ->
 
 % the locations of all birds in the last iteration
 handle_cast({bird_locations,Bird_List},State=#graphics_state{bird_queue = Bird_queue})->
-    io:format("got back locations~p~n",[Bird_List]),
+%%    io:format("got back locations~p~n",[Bird_List]),
     New_bird_queue = queue:in(Bird_List,Bird_queue),
     NewState = State#graphics_state{bird_queue = New_bird_queue},
     {noreply, NewState};
@@ -335,10 +335,10 @@ graphics_reduce(Bird_list,Frame_number,0,Next_N)->
     rpc:call(?GRAPHICS_NODE,graphics,graphics_rpc,[{bird_locations,Bird_list}]),
     case Next_N of
     0 -> io:format("All birds Dead waiting for next generation~n"),
-            wx_object:cast(graphics,{new_generation}),
-            receive
-                {new_generation,New_N}->io:format("restarting graphics~n"), graphics_reduce([],1,New_N,New_N)
-            end;
+        rpc:call(?GRAPHICS_NODE,graphics,graphics_rpc,[{new_generation}]),
+        receive
+            {new_generation,New_N}->io:format("restarting graphics~n"), graphics_reduce([],1,New_N,New_N)
+        end;
         N -> graphics_reduce([],Frame_number+1,N,N)
     end;
 graphics_reduce(Bird_List,Frame_number,N,Next_N)->
@@ -355,10 +355,10 @@ graphics_reduce(Bird_List,Frame_number,N,Next_N)->
 %%            io:format("message slowing graphics down removed~n"),
             graphics_reduce(Bird_List,Frame_number,N,Next_N);
         {kill,_From}->io:format("graphics proxy closed~n"),ok
-    after 1000->
-        io:format("message was missing from graphics. removing one bird. Frame: ~p Remaining:~p~n",[Frame_number,N]),
-        flush_messages(),
-        graphics_reduce(Bird_List,Frame_number,0,0)
+%%    after 2000->
+%%        io:format("message was missing from graphics. removing one bird. Frame: ~p Remaining:~p~n",[Frame_number,N]),
+%%        flush_messages(),
+%%        graphics_reduce(Bird_List,Frame_number,0,0)
 
     end.
 flush_messages() ->
