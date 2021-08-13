@@ -57,6 +57,7 @@ init([Name,Pc_num,Learning_pid,Number_of_networks,Num_Layers,Num_Neurons_Per_Lay
   [ets:insert(Gen_ets,{Pid,Graph})||{Pid,Graph}<-Networks],
   sync_ets(Gen_ets,Learning_pid,Name),
   Neighbors_map_ets= learningFSM:create_ets_map(Pc_Names,Name_to_atom,#{}),
+  io:format("Neighbors map ~p~n",[Neighbors_map_ets]),
   % build neighbor ets
 
   {ok, #pc_server_state{name = Name,pc_num = Pc_num, learning_pid = Learning_pid,
@@ -113,7 +114,9 @@ handle_cast({finished_simulation,From,Time}, State = #pc_server_state{remaining_
   {noreply, State#pc_server_state{remaining_networks = Remaining_networks-1}};
 
 handle_cast({neighbor_ets_update,From,Neighbor,List_of_gen}, State = #pc_server_state{})->
-  spawn(fun()->update_ets(List_of_gen,Neighbor,State#pc_server_state.neighbours_map_ets)end);
+  io:format("updating neighbors~n"),
+  spawn(fun()->update_ets(List_of_gen,Neighbor,State#pc_server_state.neighbours_map_ets)end),
+  {noreply,State};
 
 % from learning fsm
 handle_cast({network_feedback,From,TopGens}, State = #pc_server_state{name = Pc_Name,gen_ets = Gen_ets,learning_pid = Learning_FSM_Pid})when From =:= State#pc_server_state.learning_pid->
@@ -315,15 +318,17 @@ start_simulation_kill([H|T],Pips)->
 
 sync_ets(Gen_ets,Learning_FSM_Pid,Pc_pid) ->
   Pid_Gen_List = ets:tab2list(Gen_ets),
-  io:format(" before ! sync_ets"),
+  io:format(" before ! sync_ets~n"),
   Fully_Serialized_ETS = [{Network_Pid,serialize(G)}||{Network_Pid,G}<-Pid_Gen_List],
-  io:format("sync_ets"),
-  rpc:call(?GRAPHICS_NODE,learningFSM,lfsm_rpc,{update_generation,Pc_pid,Fully_Serialized_ETS}).
+  io:format("sync_ets~n"),
+  rpc:call(?GRAPHICS_NODE,learningFSM,lfsm_rpc,[{update_generation,Pc_pid,Fully_Serialized_ETS}]).
 %%  gen_server:cast(Learning_FSM_Pid,{update_generation,Pc_pid,Fully_Serialized_ETS}).
 
 update_ets(List_of_gen,Neighbor,Neighbors_Ets_map)->
   Gen_ets= maps:get(Neighbor,Neighbors_Ets_map),
+  io:format("ETS ~p, gens: ~p~n",[Gen_ets,ets:tab2list(Gen_ets)]),
   ets:delete_all_objects(Gen_ets),
+  io:format("ETS after ~p, gens: ~p~n",[Gen_ets,ets:tab2list(Gen_ets)]),
   [ets:insert(Gen_ets,{NetPid,deserialize(Flat_Gen)}) ||{NetPid,Flat_Gen}<-List_of_gen].
 
  % search in the all the ets of the neighbours is the gen is exist
@@ -331,7 +336,7 @@ update_ets(List_of_gen,Neighbor,Neighbors_Ets_map)->
 ets_lookup_neighbours(Network_PID,Neighbours_map_ets) ->
   Ets_list = maps:to_list(Neighbours_map_ets),
   {Key,ETS}=hd(Ets_list),
-  io:format("~p~n",[{Ets_list,Network_PID,ets:lookup(ETS,Network_PID)}]),
+  io:format("looking for neighbors~p~n",[{Ets_list,Network_PID,ets:lookup(ETS,Network_PID)}]),
   case ets:lookup(ETS,Network_PID) of
     []-> ets_lookup_neighbours(Network_PID,maps:remove(Key,Neighbours_map_ets));
     [{_Key,Gen}] -> Gen;

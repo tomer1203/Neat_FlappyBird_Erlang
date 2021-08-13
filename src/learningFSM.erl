@@ -158,11 +158,11 @@ update_ets(Gen_ets,[{Key,Value}|T]) -> ets:insert(Gen_ets,{Key,Value}),
 
 % send all the neighbours the new gens.
 send_to_neighbours(From,List_of_gen,Pc_names)->
-  [ rpc:call(pid_to_name(Pc),pc_server,pc_rpc,[Pc,{neighbor_ets_update,self(),List_of_gen}])|| Pc<-Pc_names,Pc =/= From]. %gen_server:cast({global,Pc},{neighbor_ets_update,self(),List_of_gen})
+  [ rpc:call(pid_to_name(Pc),pc_server,pc_rpc,[Pc,{neighbor_ets_update,self(),From,List_of_gen}])|| Pc<-Pc_names,Pc =/= From]. %gen_server:cast({global,Pc},{neighbor_ets_update,self(),List_of_gen})
 
 
 create_ets_map([],_,Map)->Map;
-create_ets_map([H|T],Name_to_atom,Map)->Pc_ets = ets:new(maps:get(H,Name_to_atom),[set]),
+create_ets_map([H|T],Name_to_atom,Map)->io:format("name of new Ets ~p ~n",[maps:get(H,Name_to_atom)]), Pc_ets = ets:new(maps:get(H,Name_to_atom),[set]),
   New_map=maps:put(H,Pc_ets,Map), create_ets_map(T,Name_to_atom,New_map).
 
 lfsm_rpc(Message)->io:format("Learning_fsm rpc call~n"),

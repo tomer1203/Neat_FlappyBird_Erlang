@@ -17,6 +17,7 @@
 -export([test_rpc/0,graphics_rpc/1,graphics_reduce_rpc/1]).
 -export([init/1,handle_event/2,handle_sync_event/3,handle_info/2,handle_cast/2,terminate/2]).
 -export([graphics_reduce/1]).
+-export([generate_map/3]).
 
 -define(SERVER, ?MODULE).
 
@@ -32,20 +33,24 @@
 start(Name,C,N) ->
     Pipes = simulation:generate_pipes(?NUMBER_OF_PIPES),
     Res = wx_object:start({local,?SERVER},?MODULE,[Pipes,[Name],C,N],[]),io:format("graphics pid= ~p~n",[Res]).
+
 initialize_system(N,Pipes)->
     PC_List = [pc1,pc2,pc3,pc4],
+    ETS_Name_List = [pc1_ets,pc2_ets,pc3_ets,pc4_ets],
     PC_List2 = [{pc1,1},{pc2,2},{pc3,3},{pc4,4}],
-    Pc_to_EtsAtom = #{pc1=>pc1_ets,pc2=>pc2_ets,pc3=>pc3_ets,pc4=>pc4_ets},
+%%    Pc_to_EtsAtom = #{pc1=>pc1_ets,pc2=>pc2_ets,pc3=>pc3_ets,pc4=>pc4_ets},
+
+%%    Lfsm_to_EtsAtom = #{pc1=>sm_pc1_ets,pc2=>sm_pc2_ets,pc3=>sm_pc3_ets,pc4=>sm_pc4_ets},
     Graphics_reduce_pid = spawn_link(graphics,graphics_reduce,[N]),
     %TODO: might work with multiple nodes
     register(graphics_proxy,Graphics_reduce_pid),
     io:format("initialize graphics pid= ~p~n",[self()]),
-    {ok,Learning_pid} =  learningFSM:start_link(length(PC_List),PC_List,Pc_to_EtsAtom,N),
+    {ok,Learning_pid} =  learningFSM:start_link(length(PC_List),PC_List,generate_map(lfsm_,PC_List,ETS_Name_List),N),
     % TODO: This will need to change to rpc call later
-    rpc:call(?PC1,pc_server,start,[pc1,1,Learning_pid,round(N/length(PC_List)),1,1,PC_List,Pc_to_EtsAtom]),
-    rpc:call(?PC2,pc_server,start,[pc2,2,Learning_pid,round(N/length(PC_List)),1,1,PC_List,Pc_to_EtsAtom]),
-    rpc:call(?PC3,pc_server,start,[pc3,3,Learning_pid,round(N/length(PC_List)),1,1,PC_List,Pc_to_EtsAtom]),
-    rpc:call(?PC4,pc_server,start,[pc4,4,Learning_pid,round(N/length(PC_List)),1,1,PC_List,Pc_to_EtsAtom]),
+    rpc:call(?PC1,pc_server,start,[pc1,1,Learning_pid,round(N/length(PC_List)),1,1,PC_List,generate_map(pc1_,PC_List,ETS_Name_List)]),
+    rpc:call(?PC2,pc_server,start,[pc2,2,Learning_pid,round(N/length(PC_List)),1,1,PC_List,generate_map(pc2_,PC_List,ETS_Name_List)]),
+    rpc:call(?PC3,pc_server,start,[pc3,3,Learning_pid,round(N/length(PC_List)),1,1,PC_List,generate_map(pc3_,PC_List,ETS_Name_List)]),
+    rpc:call(?PC4,pc_server,start,[pc4,4,Learning_pid,round(N/length(PC_List)),1,1,PC_List,generate_map(pc4_,PC_List,ETS_Name_List)]),
 %%    pc_server:start(pc1,1,Learning_pid,round(N/length(PC_List)),2,5,PC_List,Pc_to_EtsAtom),
 %%    pc_server:start(pc2,2,Learning_pid,round(N/length(PC_List)),2,5,PC_List,Pc_to_EtsAtom),
 %%    pc_server:start(pc3,3,Learning_pid,round(N/length(PC_List)),2,5,PC_List,Pc_to_EtsAtom),
@@ -379,3 +384,11 @@ graphics_reduce_rpc(Pass2GraphicsReduce)->
     %io:format("got a bird update we are at node: ~p~n",[node()]).
 test_rpc()->
     io:format("RPC WORKS! ~n").
+append_atoms(Atom1,Atom2)->io:format("1: ~p 2: ~p ~n",[Atom1,Atom2]),list_to_atom(lists:append(atom_to_list(Atom1),atom_to_list(Atom2))).
+
+generate_map(Header,Keys,List_of_footers)->
+    generate_map(Header,Keys,List_of_footers,#{}).
+generate_map(Header,[],[],Map_Acc)->Map_Acc;
+generate_map(Header,[Key|KeyT],[Footer|FooterT],Map_Acc)->
+    Map_Acc2 = maps:put(Key,append_atoms(Header,Footer),Map_Acc),
+    generate_map(Header,KeyT,FooterT,Map_Acc2).
