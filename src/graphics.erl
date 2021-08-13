@@ -42,10 +42,10 @@ initialize_system(N,Pipes)->
     io:format("initialize graphics pid= ~p~n",[self()]),
     {ok,Learning_pid} =  learningFSM:start_link(length(PC_List),PC_List,Pc_to_EtsAtom,N),
     % TODO: This will need to change to rpc call later
-    rpc:call(?PC1,pc_server,start,[pc1,1,Learning_pid,round(N/length(PC_List)),2,5,PC_List,Pc_to_EtsAtom]),
-    rpc:call(?PC2,pc_server,start,[pc2,2,Learning_pid,round(N/length(PC_List)),2,5,PC_List,Pc_to_EtsAtom]),
-    rpc:call(?PC3,pc_server,start,[pc3,3,Learning_pid,round(N/length(PC_List)),2,5,PC_List,Pc_to_EtsAtom]),
-    rpc:call(?PC4,pc_server,start,[pc4,4,Learning_pid,round(N/length(PC_List)),2,5,PC_List,Pc_to_EtsAtom]),
+    rpc:call(?PC1,pc_server,start,[pc1,1,Learning_pid,round(N/length(PC_List)),1,1,PC_List,Pc_to_EtsAtom]),
+    rpc:call(?PC2,pc_server,start,[pc2,2,Learning_pid,round(N/length(PC_List)),1,1,PC_List,Pc_to_EtsAtom]),
+    rpc:call(?PC3,pc_server,start,[pc3,3,Learning_pid,round(N/length(PC_List)),1,1,PC_List,Pc_to_EtsAtom]),
+    rpc:call(?PC4,pc_server,start,[pc4,4,Learning_pid,round(N/length(PC_List)),1,1,PC_List,Pc_to_EtsAtom]),
 %%    pc_server:start(pc1,1,Learning_pid,round(N/length(PC_List)),2,5,PC_List,Pc_to_EtsAtom),
 %%    pc_server:start(pc2,2,Learning_pid,round(N/length(PC_List)),2,5,PC_List,Pc_to_EtsAtom),
 %%    pc_server:start(pc3,3,Learning_pid,round(N/length(PC_List)),2,5,PC_List,Pc_to_EtsAtom),
@@ -68,7 +68,7 @@ initialize_system(N,Pipes)->
 %%    pc_server:start(Name,1,Learning_pid,N,2,5),
 %%    gen_server:cast(Name,{start_simulation,self(),Pipes}).
 init([Pipes,PC_list,C,N]) ->
-    io:format("init: my node is: ~p~n",[node()]),
+    %io:format("init: my node is: ~p~n",[node()]),
     initialize_system(N,Pipes),
     % graphics
     WxServer = wx:new(),
@@ -334,7 +334,7 @@ move_base(X)->X - ?X_VELOCITY.
 graphics_reduce(N)->graphics_reduce([],1,N,N).
 
 graphics_reduce(Bird_list,Frame_number,0,Next_N)->
-    io:format("my node is: ~p~n",[node()]),
+    %io:format("my node is: ~p~n",[nmy node is:ode()]),
 %%    wx_object:cast({global, graphics},{bird_locations,Bird_list}),
     rpc:call(?GRAPHICS_NODE,graphics,graphics_rpc,[{bird_locations,Bird_list}]),
     case Next_N of
@@ -348,7 +348,7 @@ graphics_reduce(Bird_list,Frame_number,0,Next_N)->
 graphics_reduce(Bird_List,Frame_number,N,Next_N)->
     receive
         {bird_update,_From,Frame_number,{Collide,Bird_graphics}}->
-            io:format("received message from: ~p frame count: ~p left to receive:~p~n",[_From,Frame_number,N]),
+            %io:format("received message from: ~p frame count: ~p left to receive:~p~n",[_From,Frame_number,N]),
             New_Birdlist = [{Collide,Bird_graphics}|Bird_List],
             case Collide of
                 true->  graphics_reduce(New_Birdlist,Frame_number,N-1,Next_N-1);
@@ -375,7 +375,7 @@ graphics_rpc(Pass2Graphics)->
     wx_object:cast(graphics,Pass2Graphics).
 
 graphics_reduce_rpc(Pass2GraphicsReduce)->
-    graphics_proxy!Pass2GraphicsReduce,
-    io:format("got a bird update we are at node: ~p~n",[node()]).
+    graphics_proxy!Pass2GraphicsReduce.
+    %io:format("got a bird update we are at node: ~p~n",[node()]).
 test_rpc()->
     io:format("RPC WORKS! ~n").

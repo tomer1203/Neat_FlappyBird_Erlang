@@ -123,7 +123,7 @@ simulation(info,{neuron_send, ActuatorPid, Value},State) when ActuatorPid =:= St
   % send the current frame to graphics(only if you are subscribed to him)
   if
     State#nn_state.sub2graphics =:= true ->
-      io:format("got to nn send to graphics from node ~p~n",[node()]),
+      %io:format("got to nn send to graphics from node ~p~n",[node()]),
       rpc:call(?GRAPHICS_NODE,graphics,graphics_reduce_rpc,[{bird_update,self(),New_simulation_state#sim_state.total_time,{Collide,Bird_graphics}}]);
     true                                 -> ok
   end,

@@ -73,12 +73,20 @@ handle_call(_Request, _From, State = #learningFSM_state{}) ->
   {stop, Reason :: term(), NewState :: #learningFSM_state{}}).
 handle_cast({network_evaluation,PC_PID,Fitness_list}, State = #learningFSM_state{fitness_list = Acc_Fitness_list,number_of_pc = Number_of_pc,number_of_nn = Number_of_nn }) ->
   io:format("got network evaluation function~n"),
+  io:format("the name of the server is : : : ~p~n",[PC_PID]),
   All_Fitness_lists = lists:append(Fitness_list,Acc_Fitness_list),
   New_Fitness_list =  case length(All_Fitness_lists) of
-    Number_of_pc->
-      Keep_List=top_genotypes(All_Fitness_lists,Number_of_nn),
-      gen_server:cast(PC_PID,{network_feedback,self(),Keep_List}),[];
-    _           -> All_Fitness_lists
+                        Number_of_nn->
+
+                          Keep_List=top_genotypes(All_Fitness_lists,Number_of_nn),
+                          % TODO change to rcp call ! !
+                          io:format("nana bana i do what i whena~p~n",[{pid_to_name(PC_PID),pc_server,pc_rpc,[{network_feedback,self(),Keep_List}]}]),
+                          rpc:call(?PC1,pc_server,pc_rpc,[PC_PID,{network_feedback,self(),Keep_List}]),
+                          rpc:call(?PC2,pc_server,pc_rpc,[PC_PID,{network_feedback,self(),Keep_List}]),
+                          rpc:call(?PC3,pc_server,pc_rpc,[PC_PID,{network_feedback,self(),Keep_List}]),
+                          rpc:call(?PC4,pc_server,pc_rpc,[PC_PID,{network_feedback,self(),Keep_List}]),[];
+                    %%      gen_server:cast(PC_PID,{network_feedback,self(),Keep_List}),[];
+                        _ -> All_Fitness_lists
   end,
 
   {noreply, State#learningFSM_state{fitness_list = New_Fitness_list}};
@@ -149,7 +157,8 @@ update_ets(Gen_ets,[{Key,Value}|T]) -> ets:insert(Gen_ets,{Key,Value}),
   update_ets(Gen_ets,T).
 
 % send all the neighbours the new gens.
-send_to_neighbours(From,List_of_gen,Pc_names)->[ gen_server:cast({global,Pc},{neighbor_ets_update,self(),List_of_gen})|| Pc<-Pc_names,Pc =/= From].
+send_to_neighbours(From,List_of_gen,Pc_names)->
+  [ rpc:call(pid_to_name(Pc),pc_server,pc_rpc,[Pc,{neighbor_ets_update,self(),List_of_gen}])|| Pc<-Pc_names,Pc =/= From]. %gen_server:cast({global,Pc},{neighbor_ets_update,self(),List_of_gen})
 
 
 create_ets_map([],_,Map)->Map;
@@ -158,3 +167,11 @@ create_ets_map([H|T],Name_to_atom,Map)->Pc_ets = ets:new(maps:get(H,Name_to_atom
 
 lfsm_rpc(Message)->io:format("Learning_fsm rpc call~n"),
   gen_server:cast(learningFSM,Message).
+
+pid_to_name(PID) -> case PID of
+                      pc1 -> ?PC1;
+                      pc2 -> ?PC2;
+                      pc3 -> ?PC3;
+                      pc4 -> ?PC4;
+                      _ -> exit("wrong pc name!")
+                    end.

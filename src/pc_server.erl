@@ -14,7 +14,7 @@
 
 %% API
 -export([start_link/8,start/8]).
--export([pc_rpc/2]).
+-export([pc_rpc/2, serialize/1, deserialize/1]).
 -export([nn_monitor/2]).
 
 %% gen_server callbacks
@@ -104,7 +104,7 @@ handle_cast({finished_simulation,From,Time}, State = #pc_server_state{remaining_
 
   %TODO: Send fitness scores to learning fsm(either through messages or through ets)
   %io:format("Fitness ETS: ~p~n length of list:~p~n",[ets:tab2list(Fitness_ets),length(ets:tab2list(Fitness_ets))]),
-  rpc:cast(?GRAPHICS_NODE,learningFSM,lfsm_rpc,[{network_evaluation,State#pc_server_state.name,ets:tab2list(Fitness_ets)}]),
+  rpc:call(?GRAPHICS_NODE,learningFSM,lfsm_rpc,[{network_evaluation,State#pc_server_state.name,ets:tab2list(Fitness_ets)}]),
 %%  gen_server:cast(State#pc_server_state.learning_pid,{network_evaluation,State#pc_server_state.name,ets:tab2list(Fitness_ets)}),
   {noreply, State#pc_server_state{remaining_networks = 0}};
 handle_cast({finished_simulation,From,Time}, State = #pc_server_state{remaining_networks = Remaining_networks,fitness_ets = Fitness_ets})->
@@ -118,28 +118,33 @@ handle_cast({neighbor_ets_update,From,Neighbor,List_of_gen}, State = #pc_server_
 % from learning fsm
 handle_cast({network_feedback,From,TopGens}, State = #pc_server_state{name = Pc_Name,gen_ets = Gen_ets,learning_pid = Learning_FSM_Pid})when From =:= State#pc_server_state.learning_pid->
   % get list of all available networks(the ones that were killed), a list of the networks to keep and a list of the genotypes to mutate
-  [{Pid,_,_Fit}|_T] = TopGens,
-  [{_K,G}] = ets:lookup(Gen_ets,Pid),
+  io:format("got network_feedback~n"),
+%%  [{Pid,_Fit}|_T] = TopGens,
+%%  [{_K,G}] = ets:lookup(Gen_ets,Pid),
   {Keep_map,Mutate_list} = parseKeepList(Gen_ets,State#pc_server_state.neighbours_map_ets,TopGens),
+  io:format("keep map: ~p~n mutate list ~p~n:",[Keep_map,Mutate_list]),
   {Kill_PID_List,Keep_PID_list}=mutate_and_restart_networks(Keep_map,Mutate_list,Gen_ets,State#pc_server_state.pipe_list),
   send_kill(Kill_PID_List,Gen_ets),
   spawn(fun()->sync_ets(Gen_ets,Learning_FSM_Pid,Pc_Name)end),
   case State#pc_server_state.generation of
     graphics->
+      io:format("graphics keep message"),
       send_keep(Keep_PID_list,State#pc_server_state.pipe_list),
       start_simulation_kill(Keep_PID_list,State#pc_server_state.pipe_list),
       NewState=State#pc_server_state{generation=wait};
-      _ -> NewState=State#pc_server_state{generation=mutation, keep_list = {Keep_PID_list,Keep_PID_list}} % TODO- function start simulation, mutate, update ets ! !
+      _ -> NewState=State#pc_server_state{generation=mutation, keep_list = {Keep_PID_list,Keep_PID_list}}
   end,{noreply, NewState};
 
 % from graphics
 handle_cast({run_generation,From, Pipe_list}, State)->
 
-  io:format("got feedback from graphics~p~n",[State#pc_server_state.number_of_networks]),
+  io:format("got feedback from graphics~p~n",[State#pc_server_state.generation]),
 
   case State#pc_server_state.generation of
       mutation->
+        io:format("before !! send keep message"),
         {KeepList,KillList,_}=State#pc_server_state.keep_list,
+        io:format("send keep message"),
         send_keep(KeepList,Pipe_list),
         start_simulation_kill(KillList,Pipe_list),
         NewState=State#pc_server_state{generation=wait,remaining_networks = State#pc_server_state.number_of_networks,pipe_list = Pipe_list};
@@ -240,13 +245,15 @@ get_nn_name(PC_Name,N)->list_to_atom(lists:append("nn_",lists:append(atom_to_lis
 parseKeepList(Gen_ets,Ets_map_neighbours,KeepList)->parseKeepList(Gen_ets,Ets_map_neighbours,KeepList,#{},[]).
 parseKeepList(_Gen_ets,_Ets_map_neighbours,[],KeepAcc,MutateAcc)->{KeepAcc,MutateAcc};
 parseKeepList(Gen_ets,Ets_map_neighbours,[{NetworkPid,_Subscribe}|KeepList],KeepAcc,MutateAcc)->
+  io:format("parseKeepList ~p, ~p, ~p",[KeepAcc,MutateAcc,[{NetworkPid,_Subscribe}|KeepList]]),
   case ets:lookup(Gen_ets,NetworkPid) of
 %%    0 -> % kill network
 %%      %parseKeepList(Gen_ets,Ets_map_neighbours,KeepList,KeepAcc,[NetworkPid|KillAcc],MutateAcc);
     [{Key,G}] -> % keep but don't mutate
       parseKeepList(Gen_ets,Ets_map_neighbours,KeepList,maps:put(Key,G,KeepAcc),MutateAcc);
     [] -> New_gen = ets_lookup_neighbours(NetworkPid,Ets_map_neighbours),
-      parseKeepList(Gen_ets,Ets_map_neighbours,KeepList,KeepAcc,[New_gen|MutateAcc])% keep and mutate N-1 times(keep once)
+      parseKeepList(Gen_ets,Ets_map_neighbours,KeepList,KeepAcc,[New_gen|MutateAcc])  ;% keep and mutate N-1 times(keep once)
+    _ -> exit("no metch!")
     end.
 
 %%mutate_and_restart_networks([],[],_Gen_ets,_PipeList)->ok;
@@ -308,8 +315,11 @@ start_simulation_kill([H|T],Pips)->
 
 sync_ets(Gen_ets,Learning_FSM_Pid,Pc_pid) ->
   Pid_Gen_List = ets:tab2list(Gen_ets),
+  io:format(" before ! sync_ets"),
   Fully_Serialized_ETS = [{Network_Pid,serialize(G)}||{Network_Pid,G}<-Pid_Gen_List],
-  gen_server:cast(Learning_FSM_Pid,{update_generation,Pc_pid,Fully_Serialized_ETS}).
+  io:format("sync_ets"),
+  rpc:call(?GRAPHICS_NODE,learningFSM,lfsm_rpc,{update_generation,Pc_pid,Fully_Serialized_ETS}).
+%%  gen_server:cast(Learning_FSM_Pid,{update_generation,Pc_pid,Fully_Serialized_ETS}).
 
 update_ets(List_of_gen,Neighbor,Neighbors_Ets_map)->
   Gen_ets= maps:get(Neighbor,Neighbors_Ets_map),
@@ -317,10 +327,13 @@ update_ets(List_of_gen,Neighbor,Neighbors_Ets_map)->
   [ets:insert(Gen_ets,{NetPid,deserialize(Flat_Gen)}) ||{NetPid,Flat_Gen}<-List_of_gen].
 
  % search in the all the ets of the neighbours is the gen is exist
-ets_lookup_neighbours(Network_PID,Neighbours_map_ets) -> 
+
+ets_lookup_neighbours(Network_PID,Neighbours_map_ets) ->
   Ets_list = maps:to_list(Neighbours_map_ets),
-  case ets:lookup(hd(Ets_list),Network_PID) of
-    []-> ets_lookup_neighbours(Network_PID,maps:remove(hd(Ets_list),Neighbours_map_ets));
+  {Key,ETS}=hd(Ets_list),
+  io:format("~p~n",[{Ets_list,Network_PID,ets:lookup(ETS,Network_PID)}]),
+  case ets:lookup(ETS,Network_PID) of
+    []-> ets_lookup_neighbours(Network_PID,maps:remove(Key,Neighbours_map_ets));
     [{_Key,Gen}] -> Gen;
     G -> exit(lists:flatten(io_lib:format("The gen is not in neighbours ets ! ~p~n",[G])))
   end .
@@ -346,5 +359,5 @@ deserialize({VL, EL, NL, B}) ->
   ets:insert(N, NL),
   DG.
 
-pc_rpc(Pc,Message)->io:format("reached Pc rpc with message ~p~n",[Message]),
+pc_rpc(Pc,Message)->%io:format("reached Pc rpc with message ~p~n",[Message]),
   gen_server:cast(Pc,Message).
