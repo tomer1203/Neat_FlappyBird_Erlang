@@ -10,10 +10,10 @@
 
 %% CONSTANTS %%
 % Node Communication Constants %
--define(GRAPHICS_NODE, 'pc1@pc1@132.72.104.171').
+-define(GRAPHICS_NODE, 'pc1@132.72.104.171').
 -define(PC1, 'pc1@132.72.104.171').
--define(PC2, 'pc1@132.72.104.171').
--define(PC3, 'pc1@132.72.104.223').
+-define(PC2, 'pc2@132.72.104.171').
+-define(PC3, 'pc3@132.72.104.223').
 -define(PC4, 'pc4@132.72.104.223'). %132.72.104.
 
 % World Constants %
