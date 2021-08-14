@@ -13,7 +13,7 @@
 -include("Constants.hrl").
 
 %% API
--export([start_link/8,start/8]).
+-export([start_link/9,start/9]).
 -export([pc_rpc/2, serialize/1, deserialize/1]).
 -export([nn_monitor/2]).
 
@@ -30,13 +30,13 @@ code_change/3]).
 %% @doc Spawns the server and registers the local name (unique)
 %%-spec(start_link(Name::atom(),Pc_num::integer(), Learning_pid::pid(), Number_of_networks ::integer(),Num_Layers::integer(),Num_Neurons_Per_Layer::integer(),Neighbors_Ets_Map::term()) ->
 %%  {ok, Pid :: pid()} | ignore | {error, Reason :: term()}).
-start_link(Name,Pc_num, Learning_pid, Number_of_networks,Num_Layers,Num_Neurons_Per_Layer,Pc_Names, Name_to_atom) ->
-  gen_server:start_link({local, Name}, ?MODULE, [Name,Pc_num, Learning_pid, Number_of_networks,Num_Layers,Num_Neurons_Per_Layer,Pc_Names, Name_to_atom], []).
+start_link(Name,Pc_num, Learning_pid, Number_of_networks,Num_Layers,Num_Neurons_Per_Layer,Pc_Names, Name_to_atom,DefGenList) ->
+  gen_server:start_link({local, Name}, ?MODULE, [Name,Pc_num, Learning_pid, Number_of_networks,Num_Layers,Num_Neurons_Per_Layer,Pc_Names, Name_to_atom,DefGenList], []).
 
 %%-spec(start(Name::atom(),Pc_num :: integer(),Learning_pid::pid(), Number_of_networks ::integer(),Num_Layers::integer(),Num_Neurons_Per_Layer::integer(),Neighbors_Ets_Map::term()) ->
 %%  {ok, Pid :: pid()} | ignore | {error, Reason :: term()}).
-start(Name,Pc_num,Learning_pid,Number_of_networks,Num_Layers,Num_Neurons_Per_Layer,Pc_Names, Name_to_atom) ->
-  gen_server:start({local, Name}, ?MODULE, [Name,Pc_num,Learning_pid,Number_of_networks,Num_Layers,Num_Neurons_Per_Layer,Pc_Names, Name_to_atom], []).
+start(Name,Pc_num,Learning_pid,Number_of_networks,Num_Layers,Num_Neurons_Per_Layer,Pc_Names, Name_to_atom,DefGenList) ->
+  gen_server:start({local, Name}, ?MODULE, [Name,Pc_num,Learning_pid,Number_of_networks,Num_Layers,Num_Neurons_Per_Layer,Pc_Names, Name_to_atom,DefGenList], []).
 %%%===================================================================
 %%% gen_server callbacks
 %%%===================================================================
@@ -47,11 +47,16 @@ start(Name,Pc_num,Learning_pid,Number_of_networks,Num_Layers,Num_Neurons_Per_Lay
   {ok, State :: #pc_server_state{}} | {ok, State :: #pc_server_state{}, timeout() | hibernate} |
   {stop, Reason :: term()} | ignore).
 
-init([Name,Pc_num,Learning_pid,Number_of_networks,Num_Layers,Num_Neurons_Per_Layer,Pc_Names, Name_to_atom]) ->
+init([Name,Pc_num,Learning_pid,Number_of_networks,Num_Layers,Num_Neurons_Per_Layer,Pc_Names, Name_to_atom,DefGenList]) ->
   io:format("PC UP~n"),
   process_flag(trap_exit, false),
   %PID_genotype_map =#{},
-  Networks = construct_networks(Name, Pc_num,Number_of_networks,Num_Layers,Num_Neurons_Per_Layer),
+  GenList=case DefGenList of
+    [] ->make_gen_list(Number_of_networks,Num_Layers,Num_Neurons_Per_Layer);
+    _->[deserialize(Flat_gen) || Flat_gen <- DefGenList]
+  end,
+  io:format("after make gen list~n"),
+  Networks = construct_networks(Name, Pc_num,Number_of_networks,GenList),
   %[maps:put(G,spawn_monitor(neuralNetwork:start_link()),PID_genotype_map)  || G <-Genotype_list],
   %ets:insert(tableEx9, {K,V})
   Gen_ets = ets:new(gen_ets,[set]),
@@ -120,10 +125,15 @@ handle_cast({neighbor_ets_update,From,Neighbor,List_of_gen}, State = #pc_server_
   spawn(fun()->update_ets(List_of_gen,Neighbor,State#pc_server_state.neighbours_map_ets)end),
   {noreply,State};
 
+
 % from learning fsm
+handle_cast({network_keep,From}, State = #pc_server_state{gen_ets = Gen_ets, pipe_list=Pips})->
+  Keep_PID_list = [Pid||{Pid,_G} <- ets:tab2list(Gen_ets)],
+  send_keep(Keep_PID_list,Pips),
+  {noreply, State#pc_server_state{generation=wait}};
+
 handle_cast({network_feedback,From,TopGens}, State = #pc_server_state{name = Pc_Name,gen_ets = Gen_ets,learning_pid = Learning_FSM_Pid})when From =:= State#pc_server_state.learning_pid->
   % get list of all available networks(the ones that were killed), a list of the networks to keep and a list of the genotypes to mutate
-
   {Keep_map,Mutate_list} = parseKeepList(Gen_ets,State#pc_server_state.neighbours_map_ets,TopGens),
    io:format("keep map: ~p~n mutate list ~p~n: ~p",[maps:size(Keep_map)  ,length(Mutate_list), maps:size(Keep_map)  +length(Mutate_list)]),
   {Kill_PID_List,Keep_PID_list}=mutate_and_restart_networks(Keep_map,Mutate_list,Gen_ets,State#pc_server_state.pipe_list),
@@ -210,15 +220,15 @@ code_change(_OldVsn, State = #pc_server_state{}, _Extra) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
-construct_networks(PC_Pid,Pc_num,N,Num_Layers,Num_Neurons_Per_Layer)->
-  construct_networks(PC_Pid,Pc_num,N,self(),Num_Layers,Num_Neurons_Per_Layer,[]).
+construct_networks(PC_Pid,Pc_num,N,_GenList)->
+  construct_networks(PC_Pid,Pc_num,N,self(),_GenList,[]).
 
-construct_networks(_PC_Pid,_Pc_num,0,_Self,_Num_Layers,_Num_Neurons_Per_Layer,Acc)-> Acc;
-construct_networks(PC_Pid,Pc_num,N,Self,Num_Layers,Num_Neurons_Per_Layer,Acc)->
-  G = genotype:test_Genotype(Num_Layers,Num_Neurons_Per_Layer),
+construct_networks(_PC_Pid,_Pc_num,0,_Self,_GenList,Acc)-> Acc;
+construct_networks(PC_Pid,Pc_num,N,Self,[Gen|T],Acc)->
+%%  G = genotype:test_Genotype(Num_Layers,Num_Neurons_Per_Layer),
   {ok,Proc} = neuralNetwork:start(get_nn_name(PC_Pid,N),Self),
   spawn(?MODULE, nn_monitor, [Proc,PC_Pid]),
-  construct_networks(PC_Pid,Pc_num,N-1,Self,Num_Layers,Num_Neurons_Per_Layer,[{Proc,G}|Acc]).
+  construct_networks(PC_Pid,Pc_num,N-1,Self,T,[{Proc,Gen}|Acc]).
 
 % monitors a neural network and waits checks if it is down.
 nn_monitor(Proc,PC_pid) ->
@@ -367,6 +377,13 @@ deserialize({VL, EL, NL, B}) ->
   ets:insert(E, EL),
   ets:insert(N, NL),
   DG.
+
+make_gen_list(Number_of_networks,Num_Layers,Num_Neurons_Per_Layer) ->
+  make_gen_list(Number_of_networks,Num_Layers,Num_Neurons_Per_Layer,[]).
+make_gen_list(0,_Num_Layers,_Num_Neurons_Per_Layer,GenAcc) -> GenAcc;
+make_gen_list(Number_of_networks,Num_Layers,Num_Neurons_Per_Layer,GenAcc) ->
+  G = genotype:test_Genotype(Num_Layers,Num_Neurons_Per_Layer),
+  make_gen_list(Number_of_networks-1,Num_Layers,Num_Neurons_Per_Layer,[G|GenAcc]).
 
 pc_rpc(Pc,Message)->%io:format("reached Pc rpc with message ~p~n",[Message]),
   gen_server:cast(Pc,Message).
