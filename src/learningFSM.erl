@@ -78,13 +78,13 @@ handle_cast({network_evaluation,PC_PID,Fitness_list}, State = #learningFSM_state
   New_Fitness_list =  case length(All_Fitness_lists) of
                         Number_of_nn->
 
-                          Keep_List=top_genotypes(All_Fitness_lists,Number_of_nn),
+                          Keep_List=top_genotypes(All_Fitness_lists,Number_of_nn,State#learningFSM_state.ets_maps),
                           % TODO change to rcp call ! !
-                          io:format("nana bana i do what i whena~p~n",[{pid_to_name(PC_PID),pc_server,pc_rpc,[{network_feedback,self(),Keep_List}]}]),
-                          rpc:call(?PC1,pc_server,pc_rpc,[PC_PID,{network_feedback,self(),Keep_List}]),
-                          rpc:call(?PC2,pc_server,pc_rpc,[PC_PID,{network_feedback,self(),Keep_List}]),
-                          rpc:call(?PC3,pc_server,pc_rpc,[PC_PID,{network_feedback,self(),Keep_List}]),
-                          rpc:call(?PC4,pc_server,pc_rpc,[PC_PID,{network_feedback,self(),Keep_List}]),[];
+                          %io:format("nana bana i do what i whena~p~n",[{pid_to_name(PC_PID),pc_server,pc_rpc,[{network_feedback,self(),Keep_List}]}]),
+                          rpc:call(?PC1,pc_server,pc_rpc,[pc1,{network_feedback,self(),Keep_List}]),
+                          rpc:call(?PC2,pc_server,pc_rpc,[pc2,{network_feedback,self(),Keep_List}]),
+                          rpc:call(?PC3,pc_server,pc_rpc,[pc3,{network_feedback,self(),Keep_List}]),
+                          rpc:call(?PC4,pc_server,pc_rpc,[pc4,{network_feedback,self(),Keep_List}]),[];
                     %%      gen_server:cast(PC_PID,{network_feedback,self(),Keep_List}),[];
                         _ -> All_Fitness_lists
   end,
@@ -98,7 +98,7 @@ handle_cast({update_generation,From,List_of_gen},State) ->
   % clear the old ets and replace whit a new type of gens.
   update_ets(Gen_ets,List_of_gen),
   % send list of gens ti the neighbours.
-  send_to_neighbours(From,List_of_gen,State#learningFSM_state.pc_names),
+  %send_to_neighbours(From,List_of_gen,State#learningFSM_state.pc_names),
   {noreply, State};
 
 
@@ -139,17 +139,17 @@ code_change(_OldVsn, State = #learningFSM_state{}, _Extra) ->
 %%%===================================================================
 
 % sort from worst to the best
-top_genotypes(FitList,Number_of_networks)->
+top_genotypes(FitList,Number_of_networks,Map_ets)->
   SortedFitList=lists:sort(fun({KeyA,ValA}, {KeyB,ValB}) -> {ValA,KeyA} >= {ValB,KeyB} end, FitList),
-  make_keep_List(SortedFitList,length(SortedFitList),[],Number_of_networks).
+  make_keep_List(SortedFitList,length(SortedFitList),[],Number_of_networks,Map_ets).
 
 %%make_keep_kill_List(_ ,0 ,List) -> List;
 %%make_keep_kill_List([{PID,_}|T], N ,List) when N =< 75 -> make_keep_kill_List(T, N-1 ,List ++[{PID,0,false}]);
 %%make_keep_kill_List([{PID,_}|T], N ,List) when N > 75 -> make_keep_kill_List(T, N-1 ,List ++[{PID,4,true}]).%TODO: CHANGE TO BACK RECURSION
 
-make_keep_List(_ ,0 ,List,_Number_of_networks) -> List;
-make_keep_List([{_PID,_}|T], N ,List,Number_of_networks) when N =< round((?DIVIDE_BY-1)*Number_of_networks/?DIVIDE_BY) -> make_keep_List(T, N-1 ,List,Number_of_networks);
-make_keep_List([{PID,_}|T], N ,List,Number_of_networks) when N > round((?DIVIDE_BY-1)*Number_of_networks/?DIVIDE_BY) -> make_keep_List(T, N-1 ,List ++[{PID,true}],Number_of_networks).%TODO: CHANGE TO BACK RECURSION
+make_keep_List(_ ,0 ,List,_Number_of_networks,_Map_ets) -> List;
+make_keep_List([{_PID,_}|T], N ,List,Number_of_networks,Map_ets) when N =< round((?DIVIDE_BY-1)*Number_of_networks/?DIVIDE_BY) -> make_keep_List(T, N-1 ,List,Number_of_networks,Map_ets);
+make_keep_List([{PID,_}|T], N ,List,Number_of_networks,Map_ets) when N > round((?DIVIDE_BY-1)*Number_of_networks/?DIVIDE_BY) -> make_keep_List(T, N-1 ,List ++[{PID,true,ets_lookup(PID,Map_ets)}],Number_of_networks,Map_ets).%TODO: CHANGE TO BACK RECURSION
 
 % get ets and list and enter all the element from the list to the ets.
 update_ets(_,[]) -> ok;
@@ -162,10 +162,10 @@ send_to_neighbours(From,List_of_gen,Pc_names)->
 
 
 create_ets_map([],_,Map)->Map;
-create_ets_map([H|T],Name_to_atom,Map)->io:format("name of new Ets ~p ~n",[maps:get(H,Name_to_atom)]), Pc_ets = ets:new(maps:get(H,Name_to_atom),[set]),
+create_ets_map([H|T],Name_to_atom,Map)->io:format("name of new Ets ~p ~n",[maps:get(H,Name_to_atom)]), Pc_ets = ets:new(maps:get(H,Name_to_atom),[set,public]),
   New_map=maps:put(H,Pc_ets,Map), create_ets_map(T,Name_to_atom,New_map).
 
-lfsm_rpc(Message)->io:format("Learning_fsm rpc call~n"),
+lfsm_rpc(Message)->
   gen_server:cast(learningFSM,Message).
 
 pid_to_name(PID) -> case PID of
@@ -175,3 +175,12 @@ pid_to_name(PID) -> case PID of
                       pc4 -> ?PC4;
                       _ -> exit("wrong pc name!")
                     end.
+
+ets_lookup(Network_PID,Neighbours_map_ets) ->
+  Ets_list = maps:to_list(Neighbours_map_ets),
+  {Key,ETS}=hd(Ets_list),
+  case ets:lookup(ETS,Network_PID) of
+    []-> ets_lookup(Network_PID,maps:remove(Key,Neighbours_map_ets));
+    [{_Key,Gen}] -> {Key,Gen};
+    G -> exit(lists:flatten(io_lib:format("The gen is not in neighbours ets ! ~p~n",[G])))
+  end .

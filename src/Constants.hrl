@@ -10,18 +10,18 @@
 
 %% CONSTANTS %%
 % Node Communication Constants %
--define(GRAPHICS_NODE, 'pc1@tomer-VirtualBox').
--define(PC1, 'pc1@tomer-VirtualBox').
--define(PC2, 'pc1@tomer-VirtualBox').
--define(PC3, 'pc1@tomer-VirtualBox').
--define(PC4, 'pc1@tomer-VirtualBox'). %132.72.104.
+-define(GRAPHICS_NODE, 'pc1@omri-VirtualBox').
+-define(PC1, 'pc1@omri-VirtualBox').
+-define(PC2, 'pc2@omri-VirtualBox').
+-define(PC3, 'pc3@omri-VirtualBox').
+-define(PC4, 'pc4@omri-VirtualBox'). %132.72.104.
 
 % World Constants %
 % these are not really used since the more accurate measurement is the actual graphics size
 -define(WIN_WIDTH,600).
 -define(WIN_HEIGHT,800).
 -define(FLOOR,730).
--define(Timer,67).% Graphics Update Timer, default: 67
+-define(Timer,40).% Graphics Update Timer, default: 67
 
 % Bird Constants %
 -define(BIRD_X_LOCATION,120).%230

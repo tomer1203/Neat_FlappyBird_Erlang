@@ -47,10 +47,10 @@ initialize_system(N,Pipes)->
     io:format("initialize graphics pid= ~p~n",[self()]),
     {ok,Learning_pid} =  learningFSM:start_link(length(PC_List),PC_List,generate_map(lfsm_,PC_List,ETS_Name_List),N),
     % TODO: This will need to change to rpc call later
-    rpc:call(?PC1,pc_server,start,[pc1,1,Learning_pid,round(N/length(PC_List)),1,1,PC_List,generate_map(pc1_,PC_List,ETS_Name_List)]),
-    rpc:call(?PC2,pc_server,start,[pc2,2,Learning_pid,round(N/length(PC_List)),1,1,PC_List,generate_map(pc2_,PC_List,ETS_Name_List)]),
-    rpc:call(?PC3,pc_server,start,[pc3,3,Learning_pid,round(N/length(PC_List)),1,1,PC_List,generate_map(pc3_,PC_List,ETS_Name_List)]),
-    rpc:call(?PC4,pc_server,start,[pc4,4,Learning_pid,round(N/length(PC_List)),1,1,PC_List,generate_map(pc4_,PC_List,ETS_Name_List)]),
+    rpc:call(?PC1,pc_server,start,[pc1,1,Learning_pid,round(N/length(PC_List)),2,5,PC_List,generate_map(pc1_,PC_List,ETS_Name_List)]),
+    rpc:call(?PC2,pc_server,start,[pc2,2,Learning_pid,round(N/length(PC_List)),2,5,PC_List,generate_map(pc2_,PC_List,ETS_Name_List)]),
+    rpc:call(?PC3,pc_server,start,[pc3,3,Learning_pid,round(N/length(PC_List)),2,5,PC_List,generate_map(pc3_,PC_List,ETS_Name_List)]),
+    rpc:call(?PC4,pc_server,start,[pc4,4,Learning_pid,round(N/length(PC_List)),2,5,PC_List,generate_map(pc4_,PC_List,ETS_Name_List)]),
 %%    pc_server:start(pc1,1,Learning_pid,round(N/length(PC_List)),2,5,PC_List,Pc_to_EtsAtom),
 %%    pc_server:start(pc2,2,Learning_pid,round(N/length(PC_List)),2,5,PC_List,Pc_to_EtsAtom),
 %%    pc_server:start(pc3,3,Learning_pid,round(N/length(PC_List)),2,5,PC_List,Pc_to_EtsAtom),
@@ -200,7 +200,11 @@ handle_info(timer, State=#graphics_state{frame = Frame,base_state = Base_locatio
 %%                    [H_pipe | T_pipes] =State#graphics_state.debug_const_pipe_list,
                     NewState = State#graphics_state{simulation_finished = false, pipes_state = #pipes_graphics_rec{visible_pipeList = [H_pipe], extra_pipeList = T_pipes, used_pipeList = []}},
                     graphics_proxy ! {new_generation, ?NUMBER_OF_SUBSCRIBED_BIRDS},
-                    [gen_server:cast(PC, {run_generation, self(), PipeList}) || PC <- State#graphics_state.pc_list];
+                    rpc:call(?PC1,pc_server,pc_rpc,[pc1,{run_generation, self(), PipeList}]),
+                    rpc:call(?PC2,pc_server,pc_rpc,[pc2,{run_generation, self(), PipeList}]),
+                    rpc:call(?PC3,pc_server,pc_rpc,[pc3,{run_generation, self(), PipeList}]),
+                    rpc:call(?PC4,pc_server,pc_rpc,[pc4,{run_generation, self(), PipeList}]);
+%%                    [gen_server:cast(PC, {run_generation, self(), PipeList}) || PC <- State#graphics_state.pc_list];
 %%                    [gen_server:cast(PC, {run_generation, self(), PipeList}) || PC <- State#graphics_state.pc_list];
                 true -> NewState = State
             end,
