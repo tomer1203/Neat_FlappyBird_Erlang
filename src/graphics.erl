@@ -382,7 +382,7 @@ graphics_reduce(Bird_list,Frame_number,0,Next_N)->
 graphics_reduce(Bird_List,Frame_number,N,Next_N)->
     receive
         {bird_update,_From,Frame_number,{Collide,Bird_graphics}}->
-            %io:format("received message from: ~p frame count: ~p left to receive:~p~n",[_From,Frame_number,N]),
+            io:format("received message from: ~p frame count: ~p left to receive:~p~n",[_From,Frame_number,N]),
             New_Birdlist = [{Collide,Bird_graphics}|Bird_List],
             case Collide of
                 true->  graphics_reduce(New_Birdlist,Frame_number,N-1,Next_N-1);
@@ -393,10 +393,10 @@ graphics_reduce(Bird_List,Frame_number,N,Next_N)->
 %%            io:format("message slowing graphics down removed~n"),
             graphics_reduce(Bird_List,Frame_number,N,Next_N);
         {kill,_From}->io:format("graphics proxy closed~n"),ok
-    after 2000->
-        io:format("message was missing from graphics. removing one bird. Frame: ~p Remaining:~p~n",[Frame_number,N]),
-        flush_messages(),
-        graphics_reduce(Bird_List,Frame_number,0,0)
+%%    after 2000->
+%%        io:format("message was missing from graphics. removing one bird. Frame: ~p Remaining:~p~n",[Frame_number,N]),
+%%        flush_messages(),
+%%        graphics_reduce(Bird_List,Frame_number,0,0)
 
     end.
 flush_messages() ->

@@ -22,7 +22,7 @@
   code_change/3]).
 -define(SERVER, ?MODULE).
 
--record(learningFSM_state, {number_of_pc = 4,ets_maps=#{},pc_names=[],fitness_list =[],number_of_nn = 100, reboot=[]}).
+-record(learningFSM_state, {number_of_pc = 4,ets_maps=#{},pc_names=[],fitness_list =[],number_of_nn = 100, reboot=[], checkpoint = #{}, run_time_state= wait, pips = []}).
 
 %%%===================================================================
 %%% API
@@ -87,28 +87,39 @@ handle_call(_Request, _From, State = #learningFSM_state{}) ->
   {noreply, NewState :: #learningFSM_state{}, timeout() | hibernate} |
   {stop, Reason :: term(), NewState :: #learningFSM_state{}}).
 
-handle_cast({network_evaluation,PC_PID,Fitness_list}, State = #learningFSM_state{fitness_list = Acc_Fitness_list,reboot = Reboot,number_of_nn = Number_of_nn }) ->
+handle_cast({network_evaluation,PC_PID,Fitness_list},
+    State = #learningFSM_state{fitness_list = Acc_Fitness_list,reboot = Reboot,number_of_nn = Number_of_nn,
+      checkpoint = Map,run_time_state =Run_time_state, number_of_pc = Number_of_pc }) ->
   io:format("got network evaluation function~n"),
   io:format("the name of the server is : : : ~p~n",[PC_PID]),
-  case Reboot of
-    []->
-      All_Fitness_lists = lists:append(Fitness_list,Acc_Fitness_list),
-      New_Fitness_list =  case length(All_Fitness_lists) of
-                            Number_of_nn->
+  NewMap=case maps:is_key(PC_PID,Map) of
+           true -> Map;
+           false -> maps:put(PC_PID,true,Map)
+         end,
+  All_Fitness_lists = lists:append(Fitness_list,Acc_Fitness_list),
+  io:format(" network_evaluation size map ~p~n",[maps:size(NewMap)]),
+  case maps:size(NewMap) of
+    Number_of_pc ->
+                case Reboot of
+                  []->
+                    io:format(" network_evaluation normal mod~n"),
+                    Keep_List=top_genotypes(All_Fitness_lists,Number_of_nn,State#learningFSM_state.ets_maps),
+                    rpc:call(get(?PC1),pc_server,pc_rpc,[pc1,{network_feedback,self(),Keep_List}]),
+                    rpc:call(get(?PC2),pc_server,pc_rpc,[pc2,{network_feedback,self(),Keep_List}]),
+                    rpc:call(get(?PC3),pc_server,pc_rpc,[pc3,{network_feedback,self(),Keep_List}]),
+                    rpc:call(get(?PC4),pc_server,pc_rpc,[pc4,{network_feedback,self(),Keep_List}]),
+                    {noreply, State#learningFSM_state{fitness_list = [],checkpoint = #{}}};
 
-                              Keep_List=top_genotypes(All_Fitness_lists,Number_of_nn,State#learningFSM_state.ets_maps),
-                              %io:format("nana bana i do what i whena~p~n",[{pid_to_name(PC_PID),pc_server,pc_rpc,[{network_feedback,self(),Keep_List}]}]),
-                              rpc:call(get(?PC1),pc_server,pc_rpc,[pc1,{network_feedback,self(),Keep_List}]),
-                              rpc:call(get(?PC2),pc_server,pc_rpc,[pc2,{network_feedback,self(),Keep_List}]),
-                              rpc:call(get(?PC3),pc_server,pc_rpc,[pc3,{network_feedback,self(),Keep_List}]),
-                              rpc:call(get(?PC4),pc_server,pc_rpc,[pc4,{network_feedback,self(),Keep_List}]),[];
-                            %%      gen_server:cast(PC_PID,{network_feedback,self(),Keep_List}),[];
-                            _ -> All_Fitness_lists
-                          end,
-      {noreply, State#learningFSM_state{fitness_list = New_Fitness_list}};
-    _->
-      io:format("Reboot flushing network evaluation message"),
-      {noreply, State#learningFSM_state{fitness_list = []}}
+                  _ -> case Run_time_state of
+                         run_generation ->
+                                  io:format("network_evaluation run_generation~n"),
+                                 Pcs =[?PC1,?PC2,?PC3,?PC4],
+                                  keep_and_start(Pcs,State#learningFSM_state.pips,Number_of_nn,Reboot),
+                                  {noreply, State#learningFSM_state{reboot=[],fitness_list = [],checkpoint = #{},run_time_state = wait}};% not empty
+                         _ ->io:format("Reboot flushing network evaluation message"),{noreply, State#learningFSM_state{fitness_list = [],checkpoint = #{},run_time_state = network_evaluation}}
+                       end
+                end;
+      _->   {noreply, State#learningFSM_state{fitness_list = All_Fitness_lists, checkpoint = NewMap}}
   end;
 
 
@@ -126,7 +137,7 @@ handle_cast({update_generation,From,List_of_gen},State) ->
 %%handle_cast({update_pips,From,PipeList},State=#learningFSM_state{})->io:format("LearningFSM got Pips!!"),
 %%  {noreply,State#learningFSM_state{pips = PipeList}};
 
-handle_cast({restart_pc,PC_down}, State = #learningFSM_state{}) ->
+handle_cast({restart_pc,PC_down}, State = #learningFSM_state{checkpoint = Map}) ->
   io:format("Restarting Pc ~p ~n",[PC_down]),
   Gen_map = State#learningFSM_state.ets_maps,
   {Name,Number} = case PC_down of
@@ -138,20 +149,25 @@ handle_cast({restart_pc,PC_down}, State = #learningFSM_state{}) ->
   ETS=maps:get(Name,Gen_map),
   Flat_ets =ets:tab2list(ETS),
   GenList=[FLat_gen||{_key,FLat_gen} <- Flat_ets],
-  io:format("Created Gen List~n"),
-%%  rpc:call(get(PC_down),pc_server,start,[Name,Number,self(),round(State#learningFSM_state.number_of_nn/4),2,2,?PC_LIST,graphics:generate_map(pc1_,?PC_LIST,?ETS_NAME_LIST),GenList]),
-  io:format("Sent Start To Pcs~n"),
-%%  rpc:call(get(PC_down), pc_server,pc_rpc,[Name,{start_simulation,self(),State#learningFSM_state.pips}]),
-  io:format("Starting Simulation~n"),
-  {noreply, State#learningFSM_state{reboot =[{PC_down,Name,Number,GenList}|State#learningFSM_state.reboot]}};
+  NewMap=maps:put(name_to_sname(PC_down),reboot,Map),
+  %io:format("Reboot is :~p~n",[  [{PC_down,Name,Number,GenList}|State#learningFSM_state.reboot]]),
+  {noreply, State#learningFSM_state{checkpoint = NewMap,reboot =[{PC_down,Name,Number,GenList}|State#learningFSM_state.reboot]}};
 
-handle_cast({run_generation,From,PipeList}, State = #learningFSM_state{reboot = Reboot,number_of_nn = Number_of_nn}) ->
+% recover got 3 messages -> start simulation in the new Pcs
+
+handle_cast({run_generation,From,PipeList}, State = #learningFSM_state{reboot = Reboot,number_of_nn = Number_of_nn, run_time_state =Run_time_state }) ->
   io:format("lfsm run generation recognized~n"),
   Pcs =[?PC1,?PC2,?PC3,?PC4],
   case Reboot of
     []  ->  {noreply, State};
     _   -> io:format("lfsm run generation recognized a Reboot, restarting network~n"),
-      keep_and_start(Pcs,PipeList,Number_of_nn,Reboot), {noreply, State#learningFSM_state{reboot=[]}}
+      case Run_time_state of
+        network_evaluation ->
+          io:format("run_generation network_evaluation~n"),
+          keep_and_start(Pcs,PipeList,Number_of_nn,Reboot),
+          {noreply, State#learningFSM_state{reboot=[], run_time_state = wait}};
+        _ -> {noreply, State#learningFSM_state{pips =PipeList, run_time_state = run_generation}}
+      end
   end;
 
 
@@ -271,9 +287,12 @@ name_to_sname(Pc) ->
     ?PC3 -> pc3;
     ?PC4 -> pc4
   end.
+keep_and_start([],_PipeList,_Number_of_nn,[]) -> io:format("finsh keep_and_start ~n");
+keep_and_start([Pc|T],PipeList,Number_of_nn,[])->
+  rpc:cast(Pc,pc_server,pc_rpc,[name_to_sname(Pc),{network_keep,self()}]),
+  keep_and_start(T,PipeList,Number_of_nn,[]);
 
-keep_and_start(Pcs,PipeList,Number_of_nn,[])->
-  [rpc:cast(Pc,pc_server,pc_rpc,[name_to_sname(Pc),{network_keep,self()}])||Pc<-Pcs];
+  %[rpc:cast(Pc,pc_server,pc_rpc,[name_to_sname(Pc),{network_keep,self()}])||Pc<-Pcs];
 keep_and_start(Pcs,PipeList,Number_of_nn,[H|T])->
   {PC_down,Name,Number,GenList}=H,
   io:format("keep_and_start Restarting ~p~n",[PC_down]),

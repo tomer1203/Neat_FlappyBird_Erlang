@@ -109,8 +109,6 @@ handle_cast({finished_simulation,From,Time}, State = #pc_server_state{remaining_
 handle_cast({finished_simulation,From,Time}, State = #pc_server_state{remaining_networks = 1,fitness_ets = Fitness_ets})->
   ets:insert(Fitness_ets,{From,Time}),
   io:format("remaining networks ~p~n",[1]),
-
-  %TODO: Send fitness scores to learning fsm(either through messages or through ets)
   %io:format("Fitness ETS: ~p~n length of list:~p~n",[ets:tab2list(Fitness_ets),length(ets:tab2list(Fitness_ets))]),
   rpc:call(?GRAPHICS_NODE,learningFSM,lfsm_rpc,[{network_evaluation,State#pc_server_state.name,ets:tab2list(Fitness_ets)}]),
 %%  gen_server:cast(State#pc_server_state.learning_pid,{network_evaluation,State#pc_server_state.name,ets:tab2list(Fitness_ets)}),
@@ -127,10 +125,14 @@ handle_cast({neighbor_ets_update,From,Neighbor,List_of_gen}, State = #pc_server_
 
 
 % from learning fsm
-handle_cast({network_keep,From}, State = #pc_server_state{gen_ets = Gen_ets, pipe_list=Pips})->
+handle_cast({network_keep,From}, State = #pc_server_state{gen_ets = Gen_ets, pipe_list=Pips,learning_pid = Learning_FSM_Pid,name = Pc_Name})->
+  io:format("befor network_keep"),
   Keep_PID_list = [Pid||{Pid,_G} <- ets:tab2list(Gen_ets)],
   send_keep(Keep_PID_list,Pips),
-  {noreply, State#pc_server_state{generation=wait}};
+  spawn(fun()->sync_ets(Gen_ets,Learning_FSM_Pid,Pc_Name)end),
+  % send message finish
+  io:format("after network_keep"),
+  {noreply, State#pc_server_state{generation=wait,remaining_networks = State#pc_server_state.number_of_networks}};
 
 handle_cast({network_feedback,From,TopGens}, State = #pc_server_state{name = Pc_Name,gen_ets = Gen_ets,learning_pid = Learning_FSM_Pid})when From =:= State#pc_server_state.learning_pid->
   % get list of all available networks(the ones that were killed), a list of the networks to keep and a list of the genotypes to mutate
@@ -168,19 +170,19 @@ handle_cast({run_generation,From, Pipe_list}, State)->
   end,{noreply, NewState};
 
 handle_cast({network_down,_,Nn_Pid},State = #pc_server_state{gen_ets = Gen_ets,fitness_ets = Fitness_ETS,pipe_list = Pipes,name = Name})->
-  io:format("network_down recognized starting restart~n"),
-  [{_Key,Gen}] = ets:lookup(Gen_ets,Nn_Pid),
-  ets:delete(Gen_ets,Nn_Pid),
-  ets:delete(Fitness_ETS,Nn_Pid),
-  Result = ets:lookup(Gen_ets,Nn_Pid),
-  io:format("Result of delete ~p ~n",[Result]),
-  Self = self(),
-  {ok,New_Nn_pid} = neuralNetwork:start(get_nn_name(Name,erlang:unique_integer()),Self),
-  spawn(?MODULE, nn_monitor, [New_Nn_pid,Self]),
-  ets:insert(Gen_ets,{New_Nn_pid,Gen}),
-  ets:insert(Fitness_ETS,{New_Nn_pid,0}),
-  gen_statem:cast(New_Nn_pid,{start_simulation,self(),Gen,Pipes,true}),
-  io:format("network restarted~n"),
+%%  io:format("network_down recognized starting restart~n"),
+%%  [{_Key,Gen}] = ets:lookup(Gen_ets,Nn_Pid),
+%%  ets:delete(Gen_ets,Nn_Pid),
+%%  ets:delete(Fitness_ETS,Nn_Pid),
+%%  Result = ets:lookup(Gen_ets,Nn_Pid),
+%%  io:format("Result of delete ~p ~n",[Result]),
+%%  Self = self(),
+%%  {ok,New_Nn_pid} = neuralNetwork:start(get_nn_name(Name,erlang:unique_integer()),Self),
+%%  spawn(?MODULE, nn_monitor, [New_Nn_pid,Self]),
+%%  ets:insert(Gen_ets,{New_Nn_pid,Gen}),
+%%  ets:insert(Fitness_ETS,{New_Nn_pid,0}),
+%%  gen_statem:cast(New_Nn_pid,{start_simulation,self(),Gen,Pipes,true}),
+%%  io:format("network restarted~n"),
   {noreply, State};
 
 
@@ -205,7 +207,8 @@ handle_info(_Info, State = #pc_server_state{}) ->
 %% with Reason. The return value is ignored.
 -spec(terminate(Reason :: (normal | shutdown | {shutdown, term()} | term()),
     State :: #pc_server_state{}) -> term()).
-terminate(_Reason, _State = #pc_server_state{gen_ets = Gen_ETS}) ->io:format("closing Pc Server~n"),
+terminate(Reason, _State = #pc_server_state{gen_ets = Gen_ETS}) ->
+  io:format("closing Pc ~p Server for reason ~p~n",[Reason,_State#pc_server_state.name]),
   Gen_list = ets:tab2list(Gen_ETS),
   [gen_statem:stop(Network_pid)||{Network_pid,_Gen}<-Gen_list].
 
