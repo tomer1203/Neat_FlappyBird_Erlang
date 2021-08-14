@@ -41,6 +41,7 @@ start(Name,PC_PID) ->
 %% gen_statem:start_link/[3,4], this function is called by the new
 %% process to initialize.
 init([PC_PID]) ->
+  io:format("NN UP~n"),
   {ok, idle, #nn_state{pcPID = PC_PID}}.
 
 %% @private
@@ -121,7 +122,9 @@ simulation(info,{neuron_send, ActuatorPid, Value},State) when ActuatorPid =:= St
 
   % send the current frame to graphics(only if you are subscribed to him)
   if
-    State#nn_state.sub2graphics =:= true -> graphics_proxy!{bird_update,self(),New_simulation_state#sim_state.total_time,{Collide,Bird_graphics}};
+    State#nn_state.sub2graphics =:= true ->
+      %io:format("got to nn send to graphics from node ~p~n",[node()]),
+      rpc:call(?GRAPHICS_NODE,graphics,graphics_reduce_rpc,[{bird_update,self(),New_simulation_state#sim_state.total_time,{Collide,Bird_graphics}}]);
     true                                 -> ok
   end,
 
@@ -142,12 +145,7 @@ fitness_function(Simulation = #sim_state{bird = Bird,visible_pipeList = Pipes})-
   BestHeight = Pipe#pipe_rec.height+?PIPE_GAP/2,
   Second_Pipe_Height = (?BG_HEIGHT-?BASE_HEIGHT)-(Pipe#pipe_rec.height+?PIPE_GAP),
   Height = 15-15*abs(Bird#bird_rec.y-BestHeight)/max(Pipe#pipe_rec.height,Second_Pipe_Height),
-  Fitness = Simulation#sim_state.total_time+Height
-
-   ,
-  %io:format("Fitness= ~p~n",[Height]),
-  Fitness
-  .
+  Fitness = Simulation#sim_state.total_time+Height,Fitness.
 
 evaluation(cast,{kill,PcPID},State) when PcPID =:= State#nn_state.pcPID ->
   State#nn_state.actuatorPID ! {kill,self()}, %TODO - add to neuron kill message, if the actuator proses is dane is kill all ? (spawn_link) Tomer
@@ -156,7 +154,6 @@ evaluation(cast,{kill,PcPID},State) when PcPID =:= State#nn_state.pcPID ->
   {next_state, NextStateName, New_state};
 evaluation(cast,{keep,PcPID,Pipe_list,Sub2graph},State) when PcPID =:= State#nn_state.pcPID ->
   NextStateName = simulation,
-%%  io:format("keep~n"),
   Simulation = simulation:initiate_simulation(Pipe_list),
   Features = simulation:feature_extraction(Simulation),
   send_to_sensors(Features, State#nn_state.sensorsPIDs),

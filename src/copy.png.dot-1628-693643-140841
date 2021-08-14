@@ -1,0 +1,27 @@
+digraph G {
+rankdir=LR;
+nodesep=0.001;center=true;
+dpi= 100 ;ratio="fill";size="14.7,7.3!";margin=0;  sensor_4  [label="sensor_4\nsensor\nBias: 0.036\nLayer: 0",shape=circle,fillcolor=chartreuse1,style=filled,width=1,height=1,fixedsize=true];
+  -576460752303408927  [label="-576460752303408927\nneuron\nBias: 0.784\nLayer: 2",shape=circle,fillcolor=chartreuse1,style=filled,width=1,height=1,fixedsize=true];
+  sensor_3  [label="sensor_3\nsensor\nBias: 0.754\nLayer: 0",shape=circle,fillcolor=chartreuse1,style=filled,width=1,height=1,fixedsize=true];
+  sensor_2  [label="sensor_2\nsensor\nBias: 0.183\nLayer: 0",shape=circle,fillcolor=chartreuse1,style=filled,width=1,height=1,fixedsize=true];
+  sensor_1  [label="sensor_1\nsensor\nBias: 0.675\nLayer: 0",shape=circle,fillcolor=chartreuse1,style=filled,width=1,height=1,fixedsize=true];
+  -576460752303408991  [label="-576460752303408991\nneuron\nBias: 0.048\nLayer: 1",shape=circle,fillcolor=chartreuse1,style=filled,width=1,height=1,fixedsize=true];
+  -576460752303409023  [label="-576460752303409023\nneuron\nBias: 0.093\nLayer: 1",shape=circle,fillcolor=chartreuse1,style=filled,width=1,height=1,fixedsize=true];
+  -576460752303408895  [label="-576460752303408895\nactuator\nBias: 0.300\nLayer: 3",shape=circle,fillcolor=chartreuse1,style=filled,width=1,height=1,fixedsize=true];
+  -576460752303408959  [label="-576460752303408959\nneuron\nBias: 0.654\nLayer: 2",shape=circle,fillcolor=chartreuse1,style=filled,width=1,height=1,fixedsize=true];
+  sensor_1 -> -576460752303409023 [label="0.600"] ;
+  sensor_3 -> -576460752303409023 [label="0.674"] ;
+  sensor_2 -> -576460752303409023 [label="0.910"] ;
+  sensor_1 -> -576460752303408991 [label="0.126"] ;
+  -576460752303408991 -> -576460752303408959 [label="0.378"] ;
+  -576460752303409023 -> -576460752303408927 [label="-0.792"] ;
+  sensor_4 -> -576460752303408991 [label="0.530"] ;
+  -576460752303408959 -> -576460752303408895 [label="0.364"] ;
+  -576460752303408927 -> -576460752303408895 [label="0.738"] ;
+  sensor_4 -> -576460752303409023 [label="0.598"] ;
+  sensor_2 -> -576460752303408991 [label="0.498"] ;
+  sensor_3 -> -576460752303408991 [label="0.718"] ;
+{ rank=min;sensor_4;sensor_3;sensor_2;sensor_1}
+{ rank=max;-576460752303408895}
+}

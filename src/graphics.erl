@@ -14,8 +14,10 @@
 -include_lib("wx/include/wx.hrl").
 -include("Constants.hrl").
 -export([start/3]).
+-export([test_rpc/0,graphics_rpc/1,graphics_reduce_rpc/1]).
 -export([init/1,handle_event/2,handle_sync_event/3,handle_info/2,handle_cast/2,terminate/2]).
 -export([graphics_reduce/1]).
+-export([generate_map/3]).
 
 -define(SERVER, ?MODULE).
 
@@ -30,19 +32,50 @@
 %%    gen_statem:cast(Name,{start_simulation,self(),G,Pipes,true}).
 start(Name,C,N) ->
     Pipes = simulation:generate_pipes(?NUMBER_OF_PIPES),
-    Res = wx_object:start({local,graphics},?MODULE,[Pipes,[Name],C,N],[]),io:format("graphics pid= ~p~n",[Res]).
-initialize_system(PC_List,N,Pipes)->
-    [Name] = PC_List, % TODO: WHEN THERE ARE MULTIPLE COMPUTERS THIS WILL NEED TO CHANGE
-    %TODO: probably won't work with multiple nodes
+    Res = wx_object:start({local,?SERVER},?MODULE,[Pipes,[Name],C,N],[]),io:format("graphics pid= ~p~n",[Res]).
+
+initialize_system(N,Pipes)->
+    PC_List = [pc1,pc2,pc3,pc4],
+    ETS_Name_List = [pc1_ets,pc2_ets,pc3_ets,pc4_ets],
+    PC_List2 = [{pc1,1},{pc2,2},{pc3,3},{pc4,4}],
+%%    Pc_to_EtsAtom = #{pc1=>pc1_ets,pc2=>pc2_ets,pc3=>pc3_ets,pc4=>pc4_ets},
+
+%%    Lfsm_to_EtsAtom = #{pc1=>sm_pc1_ets,pc2=>sm_pc2_ets,pc3=>sm_pc3_ets,pc4=>sm_pc4_ets},
     Graphics_reduce_pid = spawn_link(graphics,graphics_reduce,[N]),
+    %TODO: might work with multiple nodes
     register(graphics_proxy,Graphics_reduce_pid),
-    % TODO: start more than one pc
     io:format("initialize graphics pid= ~p~n",[self()]),
-    {ok,Learning_pid} =  learningFSM:start_link(),
-    pc_server:start_link(Name,1,Learning_pid,N,2,5),
-    gen_server:cast(Name,{start_simulation,self(),Pipes}).
+
+    {ok,Learning_pid} =  learningFSM:start_link(length(PC_List),PC_List,generate_map(lfsm_,PC_List,ETS_Name_List),N),
+    % TODO: This will need to change to rpc call later
+    rpc:call(?PC1,pc_server,start,[pc1,1,Learning_pid,round(N/length(PC_List)),2,5,PC_List,generate_map(pc1_,PC_List,ETS_Name_List)]),
+    rpc:call(?PC2,pc_server,start,[pc2,2,Learning_pid,round(N/length(PC_List)),2,5,PC_List,generate_map(pc2_,PC_List,ETS_Name_List)]),
+    rpc:call(?PC3,pc_server,start,[pc3,3,Learning_pid,round(N/length(PC_List)),2,5,PC_List,generate_map(pc3_,PC_List,ETS_Name_List)]),
+    rpc:call(?PC4,pc_server,start,[pc4,4,Learning_pid,round(N/length(PC_List)),2,5,PC_List,generate_map(pc4_,PC_List,ETS_Name_List)]),
+%%    pc_server:start(pc1,1,Learning_pid,round(N/length(PC_List)),2,5,PC_List,Pc_to_EtsAtom),
+%%    pc_server:start(pc2,2,Learning_pid,round(N/length(PC_List)),2,5,PC_List,Pc_to_EtsAtom),
+%%    pc_server:start(pc3,3,Learning_pid,round(N/length(PC_List)),2,5,PC_List,Pc_to_EtsAtom),
+%%    pc_server:start(pc4,4,Learning_pid,round(N/length(PC_List)),2,5,PC_List,Pc_to_EtsAtom),
+%%    [pc_server:start(Pc,Pc_num,Learning_pid,round(N/length(PC_List)),2,5,PC_List,Pc_to_EtsAtom)|| {Pc,Pc_num}<-PC_List2],
+    rpc:call(?PC1, pc_server,pc_rpc,[pc1,{start_simulation,self(),Pipes}]),
+    rpc:call(?PC2, pc_server,pc_rpc,[pc2,{start_simulation,self(),Pipes}]),
+    rpc:call(?PC3, pc_server,pc_rpc,[pc3,{start_simulation,self(),Pipes}]),
+    rpc:call(?PC4, pc_server,pc_rpc,[pc4,{start_simulation,self(),Pipes}]).
+%%    rpc:call(?PC1, pc_server,pc_server:pc_rpc(pc2,{start_simulation,self(),Pipes}))
+%%    [rpc:call(?PC1, pc_server,pc_server:pc_rpc(Pc,{start_simulation,self(),Pipes}))||Pc<-PC_List].
+%%    [gen_server:cast(Pc,{start_simulation,self(),Pipes})||Pc<-PC_List].
+
+%%initialize_system_one_pc(PC_List,N,Pipes)->
+%%    [Name] = PC_List,
+%%    Graphics_reduce_pid = spawn_link(graphics,graphics_reduce,[N]),
+%%    register(graphics_proxy,Graphics_reduce_pid),
+%%    io:format("initialize graphics pid= ~p~n",[self()]),
+%%    {ok,Learning_pid} =  learningFSM:start_link(),
+%%    pc_server:start(Name,1,Learning_pid,N,2,5),
+%%    gen_server:cast(Name,{start_simulation,self(),Pipes}).
 init([Pipes,PC_list,C,N]) ->
-    initialize_system(PC_list,N,Pipes),
+    %io:format("init: my node is: ~p~n",[node()]),
+    initialize_system(N,Pipes),
     % graphics
     WxServer = wx:new(),
     Frame = wxFrame:new(WxServer, ?wxID_ANY, "FLappy Bird", [{size,{?BG_WIDTH, ?BG_HEIGHT}}]),
@@ -50,8 +83,8 @@ init([Pipes,PC_list,C,N]) ->
     %DC=wxPaintDC:new(Panel),
     %Paint = wxBufferedPaintDC:new(Panel),
     % create bitmap to all images
-    Button = wxButton:new(Frame, ?wxID_ANY, [{label, "Start"}]),
-    Button2 = wxButton:new(Frame, ?wxID_ANY, [{label, "finish"}]),
+    Button = wxButton:new(Frame, 10, [{label, "Start"}]),
+    Button2 = wxButton:new(Frame, 11, [{label, "finish"}]),
     MainSizer = wxBoxSizer:new(?wxHORIZONTAL),
 
     UiSizer = wxBoxSizer:new(?wxVERTICAL),
@@ -73,7 +106,9 @@ init([Pipes,PC_list,C,N]) ->
 %%    wxPanel:connect (Panel, left_down),
 %%    wxPanel:connect (Panel, right_down),
     wxFrame:connect(Frame, close_window),
-    wxButton:connect(Button, command_button_clicked),
+    %wxButton:connect(Button, command_button_clicked),
+    wxWindow:connect(Panel, command_button_clicked),
+
     %wxButton:connect(Button2, command_button_clicked, [{callback, fun handle_click2/2}]),
 
     % Generate random pipes
@@ -103,8 +138,8 @@ handle_click(#wx{obj = Button},State) ->
     {noreply, NewState}.
 handle_click2(#wx{obj = Button},_Event) ->
     io:format("Stop Button clicked~n").
-handle_event(#wx{obj = Button, event = #wxCommand{type = command_button_clicked}},State) ->
-    io:format("Start Button clicked~p~n",[State#graphics_state.pc_list]),
+handle_event(#wx{id =ID,obj = Button, event = #wxCommand{type = command_button_clicked}},State) ->
+    io:format("Button clicked~p~n",[ID]),
     NewState = State#graphics_state{super_graphics = not State#graphics_state.super_graphics},
     {noreply, NewState};
 handle_event(#wx{event = #wxClose{}},State = #graphics_state {frame = Frame}) -> % close window event
@@ -116,6 +151,7 @@ handle_event(#wx{event = #wxClose{}},State = #graphics_state {frame = Frame}) ->
 
 % the locations of all birds in the last iteration
 handle_cast({bird_locations,Bird_List},State=#graphics_state{bird_queue = Bird_queue})->
+%%    io:format("got back locations~p~n",[Bird_List]),
     New_bird_queue = queue:in(Bird_List,Bird_queue),
     NewState = State#graphics_state{bird_queue = New_bird_queue},
     {noreply, NewState};
@@ -126,6 +162,7 @@ handle_cast({new_generation},State=#graphics_state{})->
 
     % TODO: restart simulation
     NewState = State#graphics_state{ simulation_finished = true},
+
 %%    PipeList = simulation:generate_pipes(?NUMBER_OF_PIPES),
 %%    [H_pipe|T_pipes] = PipeList,
 %%    NewState = State#graphics_state{ pipes_state = #pipes_graphics_rec{visible_pipeList = [H_pipe],extra_pipeList = T_pipes,used_pipeList = []}},
@@ -134,7 +171,9 @@ handle_cast({new_generation},State=#graphics_state{})->
     % TODO: send to pc an ok message
     io:format("pc list ~p~n",[State#graphics_state.pc_list]),
 
-    {noreply, NewState}.
+    {noreply, NewState};
+handle_cast(Input,State)->
+    io:format("no fitting cast function Input= ~p ~n State= ~p~n",[Input,State]),{noreply, State}.
 %%handle_info({bird_update,_From,{Collide,Bird_loc}},State=#graphics_state{bird_list = BirdList})->
 %%    New_BirdList = queue:in({Collide,Bird_loc},BirdList),
 %%    NewState = State#graphics_state{bird_list = New_BirdList},
@@ -162,7 +201,11 @@ handle_info(timer, State=#graphics_state{frame = Frame,base_state = Base_locatio
 %%                    [H_pipe | T_pipes] =State#graphics_state.debug_const_pipe_list,
                     NewState = State#graphics_state{simulation_finished = false, pipes_state = #pipes_graphics_rec{visible_pipeList = [H_pipe], extra_pipeList = T_pipes, used_pipeList = []}},
                     graphics_proxy ! {new_generation, ?NUMBER_OF_SUBSCRIBED_BIRDS},
-                    [gen_server:cast(PC, {run_generation, self(), PipeList}) || PC <- State#graphics_state.pc_list];
+                    rpc:call(?PC1,pc_server,pc_rpc,[pc1,{run_generation, self(), PipeList}]),
+                    rpc:call(?PC2,pc_server,pc_rpc,[pc2,{run_generation, self(), PipeList}]),
+                    rpc:call(?PC3,pc_server,pc_rpc,[pc3,{run_generation, self(), PipeList}]),
+                    rpc:call(?PC4,pc_server,pc_rpc,[pc4,{run_generation, self(), PipeList}]);
+%%                    [gen_server:cast(PC, {run_generation, self(), PipeList}) || PC <- State#graphics_state.pc_list];
 %%                    [gen_server:cast(PC, {run_generation, self(), PipeList}) || PC <- State#graphics_state.pc_list];
                 true -> NewState = State
             end,
@@ -303,13 +346,15 @@ move_base(X)->X - ?X_VELOCITY.
 graphics_reduce(N)->graphics_reduce([],1,N,N).
 
 graphics_reduce(Bird_list,Frame_number,0,Next_N)->
-    wx_object:cast(graphics,{bird_locations,Bird_list}),
+    %io:format("my node is: ~p~n",[nmy node is:ode()]),
+%%    wx_object:cast({global, graphics},{bird_locations,Bird_list}),
+    rpc:call(?GRAPHICS_NODE,graphics,graphics_rpc,[{bird_locations,Bird_list}]),
     case Next_N of
-        0 -> io:format("All birds Dead waiting for next generation~n"),
-            wx_object:cast(graphics,{new_generation}),
-            receive
-                {new_generation,New_N}->io:format("restarting graphics~n"), graphics_reduce([],1,New_N,New_N)
-            end;
+    0 -> io:format("All birds Dead waiting for next generation~n"),
+        rpc:call(?GRAPHICS_NODE,graphics,graphics_rpc,[{new_generation}]),
+        receive
+            {new_generation,New_N}->io:format("restarting graphics~n"), graphics_reduce([],1,New_N,New_N)
+        end;
         N -> graphics_reduce([],Frame_number+1,N,N)
     end;
 graphics_reduce(Bird_List,Frame_number,N,Next_N)->
@@ -326,10 +371,10 @@ graphics_reduce(Bird_List,Frame_number,N,Next_N)->
 %%            io:format("message slowing graphics down removed~n"),
             graphics_reduce(Bird_List,Frame_number,N,Next_N);
         {kill,_From}->io:format("graphics proxy closed~n"),ok
-    after 1000->
-        io:format("message was missing from graphics. removing one bird. Frame: ~p Remaining:~p~n",[Frame_number,N]),
-        flush_messages(),
-        graphics_reduce(Bird_List,Frame_number,0,0)
+%%    after 2000->
+%%        io:format("message was missing from graphics. removing one bird. Frame: ~p Remaining:~p~n",[Frame_number,N]),
+%%        flush_messages(),
+%%        graphics_reduce(Bird_List,Frame_number,0,0)
 
     end.
 flush_messages() ->
@@ -338,3 +383,19 @@ flush_messages() ->
     after 0 ->
         ok
     end.
+graphics_rpc(Pass2Graphics)->
+    wx_object:cast(graphics,Pass2Graphics).
+
+graphics_reduce_rpc(Pass2GraphicsReduce)->
+    graphics_proxy!Pass2GraphicsReduce.
+    %io:format("got a bird update we are at node: ~p~n",[node()]).
+test_rpc()->
+    io:format("RPC WORKS! ~n").
+append_atoms(Atom1,Atom2)->io:format("1: ~p 2: ~p ~n",[Atom1,Atom2]),list_to_atom(lists:append(atom_to_list(Atom1),atom_to_list(Atom2))).
+
+generate_map(Header,Keys,List_of_footers)->
+    generate_map(Header,Keys,List_of_footers,#{}).
+generate_map(Header,[],[],Map_Acc)->Map_Acc;
+generate_map(Header,[Key|KeyT],[Footer|FooterT],Map_Acc)->
+    Map_Acc2 = maps:put(Key,append_atoms(Header,Footer),Map_Acc),
+    generate_map(Header,KeyT,FooterT,Map_Acc2).

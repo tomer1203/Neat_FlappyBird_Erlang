@@ -1,0 +1,46 @@
+digraph G {
+rankdir=LR;
+nodesep=0.001;center=true;
+dpi= 100 ;ratio="fill";size="14.7,7.3!";margin=0;  -576460752303414047  [label="-576460752303414047\nneuron\nBias: 0.315\nLayer: 2",shape=circle,fillcolor=chartreuse1,style=filled,width=1,height=1,fixedsize=true];
+  -576460752303414143  [label="-576460752303414143\nneuron\nBias: 0.736\nLayer: 1",shape=circle,fillcolor=chartreuse1,style=filled,width=1,height=1,fixedsize=true];
+  sensor_4  [label="sensor_4\nsensor\nBias: 0.023\nLayer: 0",shape=circle,fillcolor=chartreuse1,style=filled,width=1,height=1,fixedsize=true];
+  sensor_3  [label="sensor_3\nsensor\nBias: 0.028\nLayer: 0",shape=circle,fillcolor=chartreuse1,style=filled,width=1,height=1,fixedsize=true];
+  sensor_2  [label="sensor_2\nsensor\nBias: 0.580\nLayer: 0",shape=circle,fillcolor=chartreuse1,style=filled,width=1,height=1,fixedsize=true];
+  sensor_1  [label="sensor_1\nsensor\nBias: 0.222\nLayer: 0",shape=circle,fillcolor=chartreuse1,style=filled,width=1,height=1,fixedsize=true];
+  -576460752303413855  [label="-576460752303413855\nactuator\nBias: 0.113\nLayer: 4",shape=circle,fillcolor=chartreuse1,style=filled,width=1,height=1,fixedsize=true];
+  -576460752303414079  [label="-576460752303414079\nneuron\nBias: 0\nLayer: 1",shape=circle,fillcolor=chartreuse1,style=filled,width=1,height=1,fixedsize=true];
+  -576460752303413887  [label="-576460752303413887\nneuron\nBias: 0.261\nLayer: 3",shape=circle,fillcolor=chartreuse1,style=filled,width=1,height=1,fixedsize=true];
+  -576460752303413951  [label="-576460752303413951\nneuron\nBias: 0.317\nLayer: 3",shape=circle,fillcolor=chartreuse1,style=filled,width=1,height=1,fixedsize=true];
+  -576460752303413919  [label="-576460752303413919\nneuron\nBias: 0.492\nLayer: 3",shape=circle,fillcolor=chartreuse1,style=filled,width=1,height=1,fixedsize=true];
+  -576460752303414015  [label="-576460752303414015\nneuron\nBias: 0\nLayer: 2",shape=circle,fillcolor=chartreuse1,style=filled,width=1,height=1,fixedsize=true];
+  -576460752303414111  [label="-576460752303414111\nneuron\nBias: 0.202\nLayer: 1",shape=circle,fillcolor=chartreuse1,style=filled,width=1,height=1,fixedsize=true];
+  -576460752303413983  [label="-576460752303413983\nneuron\nBias: 0.259\nLayer: 2",shape=circle,fillcolor=chartreuse1,style=filled,width=1,height=1,fixedsize=true];
+  -576460752303414143 -> -576460752303414015 [label="-1.632"] ;
+  -576460752303414015 -> -576460752303413919 [label="0.699"] ;
+  sensor_2 -> -576460752303414111 [label="1.025"] ;
+  -576460752303414079 -> -576460752303413983 [label="-0.510"] ;
+  sensor_3 -> -576460752303414143 [label="0.011"] ;
+  -576460752303413983 -> -576460752303413919 [label="6.114"] ;
+  sensor_4 -> -576460752303414079 [label="3.525"] ;
+  -576460752303414111 -> -576460752303414047 [label="2.315"] ;
+  -576460752303414015 -> -576460752303413887 [label="0.110"] ;
+  -576460752303413919 -> -576460752303413855 [label="0.673"] ;
+  sensor_4 -> -576460752303414143 [label="2.851"] ;
+  -576460752303413983 -> -576460752303413951 [label="2.948"] ;
+  -576460752303414079 -> -576460752303414047 [label="-5.514"] ;
+  sensor_3 -> -576460752303414079 [label="3.987"] ;
+  sensor_1 -> -576460752303414079 [label="1.604"] ;
+  -576460752303413887 -> -576460752303413855 [label="0.207"] ;
+  sensor_4 -> -576460752303414111 [label="-4.438"] ;
+  sensor_2 -> -576460752303414143 [label="0.336"] ;
+  -576460752303414047 -> -576460752303413887 [label="0.862"] ;
+  sensor_3 -> -576460752303414111 [label="8.770"] ;
+  -576460752303413951 -> -576460752303413855 [label="0.916"] ;
+  sensor_1 -> -576460752303414143 [label="3.777"] ;
+  -576460752303414079 -> -576460752303414015 [label="0.789"] ;
+  -576460752303414047 -> -576460752303413919 [label="0.581"] ;
+  -576460752303413983 -> -576460752303413887 [label="1.817"] ;
+  -576460752303414047 -> -576460752303413951 [label="0.655"] ;
+{ rank=min;sensor_4;sensor_3;sensor_2;sensor_1}
+{ rank=max;-576460752303413855}
+}
