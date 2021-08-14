@@ -45,7 +45,7 @@ initialize_system(N,Pipes)->
 %%    Pc_to_EtsAtom = #{pc1=>pc1_ets,pc2=>pc2_ets,pc3=>pc3_ets,pc4=>pc4_ets},
 
 %%    Lfsm_to_EtsAtom = #{pc1=>sm_pc1_ets,pc2=>sm_pc2_ets,pc3=>sm_pc3_ets,pc4=>sm_pc4_ets},
-    Graphics_reduce_pid = spawn_link(graphics,graphics_reduce,[N]),
+    Graphics_reduce_pid = spawn_link(graphics,graphics_reduce,[round(N/4)]),
     %TODO: might work with multiple nodes
     register(graphics_proxy,Graphics_reduce_pid),
     io:format("initialize graphics pid= ~p~n",[self()]),
@@ -218,7 +218,7 @@ handle_info(timer, State=#graphics_state{frame = Frame,base_state = Base_locatio
                     [H_pipe | T_pipes] =PipeList,
 %%                    [H_pipe | T_pipes] =State#graphics_state.debug_const_pipe_list,
                     NewState = State#graphics_state{simulation_finished = false, pipes_state = #pipes_graphics_rec{visible_pipeList = [H_pipe], extra_pipeList = T_pipes, used_pipeList = []}},
-                    graphics_proxy ! {new_generation, State#graphics_state.number_of_nn},
+                    graphics_proxy ! {new_generation, round(State#graphics_state.number_of_nn / 4)},
                     rpc:cast(get(?PC1),pc_server,pc_rpc,[pc1,{run_generation, self(), PipeList}]),
                     rpc:cast(get(?PC2),pc_server,pc_rpc,[pc2,{run_generation, self(), PipeList}]),
                     rpc:cast(get(?PC3),pc_server,pc_rpc,[pc3,{run_generation, self(), PipeList}]),
@@ -375,7 +375,7 @@ graphics_reduce(Bird_list,Frame_number,0,Next_N)->
     0 -> io:format("All birds Dead waiting for next generation~n"),
         rpc:call(?GRAPHICS_NODE,graphics,graphics_rpc,[{new_generation}]),
         receive
-            {new_generation,New_N}->io:format("restarting graphics~n"), graphics_reduce([],1,New_N,New_N)
+            {new_generation,New_N}->io:format("restarting graphics~n"),graphics_reduce([],1,New_N,New_N)
         end;
         N -> graphics_reduce([],Frame_number+1,N,N)
     end;
@@ -389,14 +389,14 @@ graphics_reduce(Bird_List,Frame_number,N,Next_N)->
                 false-> graphics_reduce(New_Birdlist,Frame_number,N-1,Next_N)
             end;
         {bird_update,_From,Number,{Collide,Bird_graphics}} when Number<Frame_number->
-            io:format("removed"),
+            io:format("r"),
 %%            io:format("message slowing graphics down removed~n"),
             graphics_reduce(Bird_List,Frame_number,N,Next_N);
         {kill,_From}->io:format("graphics proxy closed~n"),ok
-%%    after 2000->
-%%        io:format("message was missing from graphics. removing one bird. Frame: ~p Remaining:~p~n",[Frame_number,N]),
-%%        flush_messages(),
-%%        graphics_reduce(Bird_List,Frame_number,0,0)
+    after 2000->
+        io:format("message was missing from graphics. removing one bird. Frame: ~p Remaining:~p~n",[Frame_number,N]),
+        %flush_messages(),
+        graphics_reduce(Bird_List,Frame_number,N-1,Next_N-1)
 
     end.
 flush_messages() ->

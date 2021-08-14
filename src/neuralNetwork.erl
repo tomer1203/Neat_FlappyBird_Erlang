@@ -119,11 +119,11 @@ simulation(info,{neuron_send, ActuatorPid, Value},State) when ActuatorPid =:= St
 %%    true ->ok
 %%  end,
   %TODO: UP TO THIS POINT
-
+  %io:format("Sub 2 graphics ~p ~n",[State#nn_state.sub2graphics]),
   % send the current frame to graphics(only if you are subscribed to him)
   if
     State#nn_state.sub2graphics =:= true ->
-      %io:format("got to nn send to graphics from node ~p~n",[node()]),
+      %io:format("send ~p~n",[New_simulation_state#sim_state.,State#nn_state.]),
       rpc:call(?GRAPHICS_NODE,graphics,graphics_reduce_rpc,[{bird_update,self(),New_simulation_state#sim_state.total_time,{Collide,Bird_graphics}}]);
     true                                 -> ok
   end,
@@ -152,12 +152,12 @@ evaluation(cast,{kill,PcPID},State) when PcPID =:= State#nn_state.pcPID ->
   New_state=State#nn_state{require_mutation =true},
   NextStateName = idle,
   {next_state, NextStateName, New_state};
-evaluation(cast,{keep,PcPID,Pipe_list,Sub2graph},State) when PcPID =:= State#nn_state.pcPID ->
+evaluation(cast,{keep,PcPID,Pipe_list,_Sub2graph},State) when PcPID =:= State#nn_state.pcPID ->
   NextStateName = simulation,
   Simulation = simulation:initiate_simulation(Pipe_list),
   Features = simulation:feature_extraction(Simulation),
   send_to_sensors(Features, State#nn_state.sensorsPIDs),
-  New_stat =State#nn_state{simulation = Simulation, pipList =Pipe_list,sub2graphics = Sub2graph},
+  New_stat =State#nn_state{simulation = Simulation, pipList =Pipe_list}, % sub2graphics = Sub2graph
   {next_state, NextStateName, New_stat}.
 
 

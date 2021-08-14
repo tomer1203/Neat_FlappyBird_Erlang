@@ -100,7 +100,8 @@ handle_call(_Request, _From, State = #pc_server_state{}) ->
 handle_cast({start_simulation,_From,Pipe_list}, State = #pc_server_state{gen_ets = Gen_ets})->
   io:format("starting Pc ~p simulation~n",[State#pc_server_state.name]),
   First_key = ets:first(Gen_ets),
-  start_networks(First_key,Pipe_list,Gen_ets),
+  start_networks(First_key,Pipe_list,Gen_ets,State#pc_server_state.name),
+  io:format("PC: ~p updating pipes in start_simulation, first pipe ~p~n",[State#pc_server_state.name,hd(Pipe_list)]),
   {noreply, State#pc_server_state{pipe_list = Pipe_list}};
 
 % A message from one of the neural networks to the Pc updating it how the simulation went
@@ -138,7 +139,7 @@ handle_cast({network_feedback,From,TopGens}, State = #pc_server_state{name = Pc_
   % get list of all available networks(the ones that were killed), a list of the networks to keep and a list of the genotypes to mutate
   {Keep_map,Mutate_list} = parseKeepList(Gen_ets,State#pc_server_state.neighbours_map_ets,TopGens),
    io:format("keep map: ~p~n mutate list ~p~n: ~p",[maps:size(Keep_map)  ,length(Mutate_list), maps:size(Keep_map)  +length(Mutate_list)]),
-  {Kill_PID_List,Keep_PID_list}=mutate_and_restart_networks(Keep_map,Mutate_list,Gen_ets,State#pc_server_state.pipe_list),
+  {Kill_PID_List,Keep_PID_list}=mutate_and_restart_networks(Pc_Name,Keep_map,Mutate_list,Gen_ets,State#pc_server_state.pipe_list),
   %io:format("kill_List ~p keep list ~p",[Kill_PID_List,Keep_PID_list]),
   %send_kill(Kill_PID_List,Gen_ets),
   spawn(fun()->sync_ets(Gen_ets,Learning_FSM_Pid,Pc_Name)end),
@@ -156,7 +157,7 @@ handle_cast({network_feedback,From,TopGens}, State = #pc_server_state{name = Pc_
 handle_cast({run_generation,From, Pipe_list}, State)->
 
   io:format("got feedback from graphics~p~n",[State#pc_server_state.generation]),
-
+  io:format("PC: ~p updating pipes in run_generation, first pipe ~p~n",[State#pc_server_state.name,hd(Pipe_list)]),
   case State#pc_server_state.generation of
       mutation->
         %io:format("before !! send keep message"),
@@ -247,14 +248,18 @@ nn_monitor(Proc,PC_pid) ->
   end.
 
 % opens up the networks
-start_networks('$end_of_table',_Pipes,_Gen_ets)->ok;
-start_networks(Key,Pipes,Gen_ets)->
+start_networks('$end_of_table',_Pipes,_Gen_ets,PC_pid)->ok;
+start_networks(Key,Pipes,Gen_ets,PC_pid)->
   [{Key,G}]=ets:lookup(Gen_ets,Key),
   % TODO: last value is sub2 graphics! this needs to change to false eventually and it is currently true for debugging
-  gen_statem:cast(Key,{construct_simulation,self(),G,true}),
+  io:format("Start Network Pc_pid = ~p ~n",[PC_pid]),
+  case PC_pid of
+  pc1->gen_statem:cast(Key,{construct_simulation,self(),G,true});
+    _->gen_statem:cast(Key,{construct_simulation,self(),G,false})
+  end,
   gen_statem:cast(Key,{start_simulation,self(),Pipes}),
   Next_key = ets:next(Gen_ets,Key),
-  start_networks(Next_key,Pipes,Gen_ets).
+  start_networks(Next_key,Pipes,Gen_ets,PC_pid).
 
 get_nn_name(PC_Name,N)->list_to_atom(lists:append("nn_",lists:append(atom_to_list(PC_Name), integer_to_list(N)))).
 %put_and_send(G,PID,Map,Pipe_list) ->ok.
@@ -287,26 +292,26 @@ parseKeepList(Gen_ets,Ets_map_neighbours,[{NetworkPid,_Subscribe,{To,G}}|KeepLis
 
 
 
-mutate_and_restart_networks(KeepMap,MutateList,Gen_ets,_PipeList) -> mutate_and_restart_networks(KeepMap,MutateList,Gen_ets,ets:tab2list(Gen_ets),_PipeList,[],[]).
-mutate_and_restart_networks(KeepMap,MutateList,Gen_ets,[],_PipeList,Kill_PID_List,Keep_PID_list) -> case MutateList of
+mutate_and_restart_networks(PC_pid,KeepMap,MutateList,Gen_ets,_PipeList) -> mutate_and_restart_networks(PC_pid,KeepMap,MutateList,Gen_ets,ets:tab2list(Gen_ets),_PipeList,[],[]).
+mutate_and_restart_networks(PC_pid,KeepMap,MutateList,Gen_ets,[],_PipeList,Kill_PID_List,Keep_PID_list) -> case MutateList of
                                                                           [] -> {Kill_PID_List,Keep_PID_list};
                                                                           _ -> exit("mutate list is not empty")
                                                                         end;
-mutate_and_restart_networks(KeepMap,MutateList,Gen_ets, [{Key,_Genotype}|T_ets],_PipeList,Kill_List,Keep_list) ->
+mutate_and_restart_networks(PC_pid,KeepMap,MutateList,Gen_ets, [{Key,_Genotype}|T_ets],_PipeList,Kill_List,Keep_list) ->
   case maps:is_key(Key,KeepMap) of
     false ->
       [G|T_gens] =MutateList,
       ets:delete(Gen_ets,Key),
-      assignGenToNetwork(Key,G,Gen_ets),
+      assignGenToNetwork(Key,G,Gen_ets,PC_pid),
       % TODO send start message
-      mutate_and_restart_networks(KeepMap,T_gens,Gen_ets,T_ets,_PipeList,[Key|Kill_List],Keep_list);
+      mutate_and_restart_networks(PC_pid,KeepMap,T_gens,Gen_ets,T_ets,_PipeList,[Key|Kill_List],Keep_list);
     true ->
       % TODO send message start
-      mutate_and_restart_networks(maps:remove(Key,KeepMap),MutateList,Gen_ets,T_ets,_PipeList,Kill_List,[Key|Keep_list])
+      mutate_and_restart_networks(PC_pid,maps:remove(Key,KeepMap),MutateList,Gen_ets,T_ets,_PipeList,Kill_List,[Key|Keep_list])
   end.
 
 
-assignGenToNetwork(NetworkPid,Gen,Gen_ets)->
+assignGenToNetwork(NetworkPid,Gen,Gen_ets,PC_pid)->
   % Copy gen
   Copy_genotype = digraph_utils:subgraph(Gen,digraph:vertices(Gen)),
   genotype:mutator(Copy_genotype,round(abs(rand:normal())*15)),
@@ -315,7 +320,11 @@ assignGenToNetwork(NetworkPid,Gen,Gen_ets)->
   ets:insert(Gen_ets,{NetworkPid, Copy_genotype}),
   % TODO: the last value is Sub2graphics and it is currently true only for debugging and needs to be changed in the future..
   gen_statem:cast(NetworkPid,{kill,self()}),
-  gen_statem:cast(NetworkPid,{construct_simulation,self(),Copy_genotype,true}),
+  case PC_pid of
+    pc1->gen_statem:cast(NetworkPid,{construct_simulation,self(),Copy_genotype,true});
+    _->gen_statem:cast(NetworkPid,{construct_simulation,self(),Copy_genotype,false})
+  end,
+  %gen_statem:cast(NetworkPid,{construct_simulation,self(),Copy_genotype,true}),
   ok.
 
 % send a kill message to all the kill networks
