@@ -94,6 +94,7 @@ handle_cast({network_evaluation,PC_PID,Fitness_list}, State = #learningFSM_state
   {noreply, State#learningFSM_state{fitness_list = New_Fitness_list}};
 
 handle_cast({update_generation,From,List_of_gen},State) ->
+  io:format("ETS learnig FSM got update from: ~p~n",[From]),
   Map_ets=State#learningFSM_state.ets_maps,
   Gen_ets = maps:get(From,Map_ets),
   ets:delete_all_objects(Gen_ets),
@@ -143,6 +144,7 @@ code_change(_OldVsn, State = #learningFSM_state{}, _Extra) ->
 % sort from worst to the best
 top_genotypes(FitList,Number_of_networks,Map_ets)->
   SortedFitList=lists:sort(fun({KeyA,ValA}, {KeyB,ValB}) -> {ValA,KeyA} >= {ValB,KeyB} end, FitList),
+%%io:format("fit:~p",[SortedFitList]),
   make_keep_List(SortedFitList,length(SortedFitList),[],Number_of_networks,Map_ets).
 
 %%make_keep_kill_List(_ ,0 ,List) -> List;

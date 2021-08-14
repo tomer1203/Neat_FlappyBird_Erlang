@@ -10,11 +10,11 @@
 
 %% CONSTANTS %%
 % Node Communication Constants %
--define(GRAPHICS_NODE, 'pc1@132.72.104.171').
--define(PC1, 'pc1@132.72.104.171').
--define(PC2, 'pc2@132.72.104.213').
--define(PC3, 'pc3@132.72.104.203').
--define(PC4, 'pc4@132.72.104.214'). %132.72.104.
+-define(GRAPHICS_NODE, 'pc1@omri-VirtualBox').
+-define(PC1, 'pc1@omri-VirtualBox').
+-define(PC2, 'pc1@omri-VirtualBox').
+-define(PC3, 'pc1@omri-VirtualBox').
+-define(PC4, 'pc1@omri-VirtualBox'). %132.72.104.
 
 % World Constants %
 % these are not really used since the more accurate measurement is the actual graphics size
@@ -95,6 +95,7 @@
   frame, panel, dc, paint,
   pc_list, %TODO: maybe change this to a constant list or something
   simulation_finished,super_graphics,
+  number_of_nn,
   debug_const_pipe_list,
   time = 0, collide = false, base_state, bird_queue = queue:new(), pipes_state, current_bird_list = [],
   bmpRMap,bmpB1Map,bmpB2Map,bmpB3Map,bmpB4Map,bmpPipeMap,bmpBaseMap,bmpLogoMap}).
