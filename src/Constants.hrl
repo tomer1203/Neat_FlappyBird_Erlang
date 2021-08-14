@@ -15,7 +15,7 @@
 %%-define(PC2, 'pc1@omri-VirtualBox').
 %%-define(PC4, 'pc1@omri-VirtualBox'). %132.72.104.
 %%-define(PC3, 'pc1@omri-VirtualBox').
--define(GRAPHICS_NODE, 'pc1@omri-VirtualBox').
+-define(GRAPHICS_NODE, 'pc1@132.72.104.171').
 -define(PC1, 'pc1@132.72.104.171').
 -define(PC2, 'pc2@132.72.104.213').
 -define(PC3, 'pc3@132.72.104.203').
