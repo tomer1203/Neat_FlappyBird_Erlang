@@ -45,6 +45,7 @@ initialize_system(N,Pipes)->
     %TODO: might work with multiple nodes
     register(graphics_proxy,Graphics_reduce_pid),
     io:format("initialize graphics pid= ~p~n",[self()]),
+
     {ok,Learning_pid} =  learningFSM:start_link(length(PC_List),PC_List,generate_map(lfsm_,PC_List,ETS_Name_List),N),
     % TODO: This will need to change to rpc call later
     rpc:call(?PC1,pc_server,start,[pc1,1,Learning_pid,round(N/length(PC_List)),2,5,PC_List,generate_map(pc1_,PC_List,ETS_Name_List)]),
@@ -286,12 +287,14 @@ draw_base(PaintPanel, BmpBaseMap, X1, X2)->
     wxDC:drawBitmap(PaintPanel,BmpBaseMap,{X1,?BG_HEIGHT - ?BASE_HEIGHT}),
     wxDC:drawBitmap(PaintPanel,BmpBaseMap,{X2,?BG_HEIGHT - ?BASE_HEIGHT}).
 
-terminate(_Reason, _State = #graphics_state{}) ->
+terminate(_Reason, State = #graphics_state{}) ->
     io:format("killing graphics"),
     graphics_proxy!{kill,self()},
+    [gen_server:stop(PC)||PC<- State#graphics_state.pc_list],
+    gen_server:stop(learningFSM),
 %%    _State#graphics_state!{kill,self()},
     unregister(graphics_proxy),
-    exit("aahhh").
+    wxFrame:destroy(State#graphics_state.frame).
 
 createBitMaps() ->         % create bitmap to all images
     Rmap = wxImage:new("../Images/bg.png"),

@@ -174,8 +174,9 @@ handle_event(_EventType, _EventContent, _StateName, State = #nn_state{}) ->
 %% terminate. It should be the opposite of Module:init/1 and do any
 %% necessary cleaning up. When it returns, the gen_statem terminates with
 %% Reason. The return value is ignored.
-terminate(_Reason, _StateName, _State = #nn_state{}) ->
-  ok.
+terminate(_Reason, _StateName, State = #nn_state{}) ->
+  io:format("closed_network~n"),
+  State#nn_state.actuatorPID ! {kill,self()}.
 
 %% @private
 %% @doc Convert process state when code is changed
