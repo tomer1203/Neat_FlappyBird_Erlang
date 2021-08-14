@@ -17,9 +17,9 @@
 %%-define(PC3, 'pc1@omri-VirtualBox').
 -define(GRAPHICS_NODE, 'pc1@omri-VirtualBox').
 -define(PC1, 'pc1@132.72.104.171').
--define(PC2, 'pc1@132.72.104.213').
--define(PC3, 'pc1@132.72.104.203').
--define(PC4, 'pc1@132.72.104.214'). %132.72.104.
+-define(PC2, 'pc2@132.72.104.213').
+-define(PC3, 'pc3@132.72.104.203').
+-define(PC4, 'pc4@132.72.104.214'). %132.72.104.
 % World Constants %
 % these are not really used since the more accurate measurement is the actual graphics size
 -define(WIN_WIDTH,600).
