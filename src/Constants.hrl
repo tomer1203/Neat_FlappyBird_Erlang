@@ -1,25 +1,31 @@
 %%%-------------------------------------------------------------------
-%%% @author tomer
+%%% @author Tomer, Omri
 %%% @copyright (C) 2021, <COMPANY>
 %%% @doc
 %%%
 %%% @end
 %%% Created : 21. Jul 2021 12:52
 %%%-------------------------------------------------------------------
--author("tomer").
+-author("Tomer, Omri").
 
 %% CONSTANTS %%
 % Node Communication Constants %
-%%-define(GRAPHICS_NODE, 'pc1@omri-VirtualBox').
-%%-define(PC1, 'pc1@omri-VirtualBox').
-%%-define(PC2, 'pc1@omri-VirtualBox').
-%%-define(PC4, 'pc1@omri-VirtualBox'). %132.72.104.
-%%-define(PC3, 'pc1@omri-VirtualBox').
+%%-define(GRAPHICS_NODE, 'pc1@tomer-VirtualBox').
+%%-define(PC1, 'pc1@tomer-VirtualBox').
+%%-define(PC2, 'pc2@tomer-VirtualBox').
+%%-define(PC3, 'pc3@tomer-VirtualBox'). %132.72.104.
+%%-define(PC4, 'pc4@tomer-VirtualBox').
+%%-define(GRAPHICS_NODE, 'pc1@tomer-VirtualBox').
+%%-define(PC1, 'pc1@tomer-VirtualBox').
+%%-define(PC2, 'pc1@tomer-VirtualBox').
+%%-define(PC3, 'pc1@tomer-VirtualBox'). %132.72.104.
+%%-define(PC4, 'pc1@tomer-VirtualBox').
 -define(GRAPHICS_NODE, 'pc1@132.72.104.171').
 -define(PC1, 'pc1@132.72.104.171').
 -define(PC2, 'pc2@132.72.104.213').
 -define(PC3, 'pc3@132.72.104.203').
 -define(PC4, 'pc4@132.72.104.214'). %132.72.104.
+
 % World Constants %
 % these are not really used since the more accurate measurement is the actual graphics size
 -define(WIN_WIDTH,600).
@@ -42,7 +48,7 @@
 -define(PIPE_MIN_DISTANCE_FROM_EDGES,50).
 -define(PIPE_MAX_HEIGHT,?BG_HEIGHT-?BASE_HEIGHT-?PIPE_GAP-?PIPE_MIN_DISTANCE_FROM_EDGES).
 -define(NUMBER_OF_PIPES,20).
--define(END_OF_THE_WORLD,5000).
+-define(END_OF_THE_WORLD,10000).
 
 % Graphics Constants %
 -define(BG_WIDTH,564).%288
@@ -62,7 +68,8 @@
 
 -define(NUMBER_OF_SUBSCRIBED_BIRDS,100).
 -define(DIVIDE_BY,4). % controls how many survive for example for divide by 4 and 100 nn you get 25 survive and 75 dead
-
+-define(ETS_NAME_LIST,[pc1_ets,pc2_ets,pc3_ets,pc4_ets]).
+-define(PC_LIST, [pc1,pc2,pc3,pc4]).
 %% SIMULATION RECORDS %%
 -record(pipe_rec,{height,x,passed}).
 
@@ -98,7 +105,7 @@
 -record(graphics_state, {
   frame, panel, dc, paint,
   pc_list, %TODO: maybe change this to a constant list or something
-  simulation_finished,super_graphics,
+  simulation_finished,super_graphics, started = false,
   number_of_nn,
   debug_const_pipe_list,
   time = 0, collide = false, base_state, bird_queue = queue:new(), pipes_state, current_bird_list = [],

@@ -1,5 +1,5 @@
 %%%-------------------------------------------------------------------
-%%% @author tomer
+%%% @author Tomer, Omri
 %%% @copyright (C) 2021, <COMPANY>
 %%% @doc
 %%%
@@ -7,7 +7,7 @@
 %%% Created : 21. Jul 2021 15:34
 %%%-------------------------------------------------------------------
 -module(simulation).
--author("tomer").
+-author("Tomer, Omri").
 
 %% API
 -export([simulate_a_frame/2,feature_extraction/1,initiate_simulation/1,simulate_pipes/1,generate_pipes/1,test/0]).
