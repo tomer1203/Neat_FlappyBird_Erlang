@@ -214,9 +214,10 @@ handle_info(timer, State=#graphics_state{frame = Frame,base_state = Base_locatio
         true ->
             if
                 State#graphics_state.simulation_finished =:= true ->
-                    PipeList = simulation:generate_pipes(?NUMBER_OF_PIPES),
+%%                    PipeList = simulation:generate_pipes(?NUMBER_OF_PIPES),
+                    PipeList = State#graphics_state.debug_const_pipe_list,
                     [H_pipe | T_pipes] =PipeList,
-%%                    [H_pipe | T_pipes] =State#graphics_state.debug_const_pipe_list,
+%%                    [H_pipe | T_pipes] =
                     NewState = State#graphics_state{simulation_finished = false, pipes_state = #pipes_graphics_rec{visible_pipeList = [H_pipe], extra_pipeList = T_pipes, used_pipeList = []}},
                     graphics_proxy ! {new_generation, round(State#graphics_state.number_of_nn / 4)},
                     rpc:cast(get(?PC1),pc_server,pc_rpc,[pc1,{run_generation, self(), PipeList}]),
@@ -382,7 +383,7 @@ graphics_reduce(Bird_list,Frame_number,0,Next_N)->
 graphics_reduce(Bird_List,Frame_number,N,Next_N)->
     receive
         {bird_update,_From,Frame_number,{Collide,Bird_graphics}}->
-            io:format("received message from: ~p frame count: ~p left to receive:~p~n",[_From,Frame_number,N]),
+            %io:format("received message from: ~p frame count: ~p left to receive:~p~n",[_From,Frame_number,N]),
             New_Birdlist = [{Collide,Bird_graphics}|Bird_List],
             case Collide of
                 true->  graphics_reduce(New_Birdlist,Frame_number,N-1,Next_N-1);

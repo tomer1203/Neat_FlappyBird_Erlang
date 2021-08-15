@@ -149,24 +149,30 @@ handle_cast({restart_pc,PC_down}, State = #learningFSM_state{checkpoint = Map}) 
   ETS=maps:get(Name,Gen_map),
   Flat_ets =ets:tab2list(ETS),
   GenList=[FLat_gen||{_key,FLat_gen} <- Flat_ets],
-  NewMap=maps:put(name_to_sname(PC_down),reboot,Map),
+  SizeMap = maps:size(Map),
+  if
+    SizeMap > 2 -> gen_server:cast(learningFSM,{network_evaluation,name_to_sname(PC_down),[]}),
+      {noreply, State#learningFSM_state{reboot =[{PC_down,Name,Number,GenList}|State#learningFSM_state.reboot]}};
+    true -> NewMap=maps:put(name_to_sname(PC_down),reboot,Map),
+      {noreply, State#learningFSM_state{checkpoint = NewMap,reboot =[{PC_down,Name,Number,GenList}|State#learningFSM_state.reboot]}}
+  end;
   %io:format("Reboot is :~p~n",[  [{PC_down,Name,Number,GenList}|State#learningFSM_state.reboot]]),
-  {noreply, State#learningFSM_state{checkpoint = NewMap,reboot =[{PC_down,Name,Number,GenList}|State#learningFSM_state.reboot]}};
+
 
 % recover got 3 messages -> start simulation in the new Pcs
 
-handle_cast({run_generation,From,PipeList}, State = #learningFSM_state{reboot = Reboot,number_of_nn = Number_of_nn, run_time_state =Run_time_state }) ->
+handle_cast({run_generation,From,PipeList}, State = #learningFSM_state{reboot = Reboot,number_of_nn = Number_of_nn, run_time_state =Run_time_state}) ->
   io:format("lfsm run generation recognized~n"),
   Pcs =[?PC1,?PC2,?PC3,?PC4],
   case Reboot of
     []  ->  {noreply, State};
     _   -> io:format("lfsm run generation recognized a Reboot, restarting network~n"),
-      case Run_time_state of
-        network_evaluation ->
+      if
+        Run_time_state =:= network_evaluation ->
           io:format("run_generation network_evaluation~n"),
           keep_and_start(Pcs,PipeList,Number_of_nn,Reboot),
           {noreply, State#learningFSM_state{reboot=[], run_time_state = wait}};
-        _ -> {noreply, State#learningFSM_state{pips =PipeList, run_time_state = run_generation}}
+        true -> {noreply, State#learningFSM_state{pips =PipeList, run_time_state = run_generation}}
       end
   end;
 

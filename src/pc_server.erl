@@ -160,8 +160,6 @@ handle_cast({run_generation,From, Pipe_list}, State)->
   io:format("PC: ~p updating pipes in run_generation, first pipe ~p~n",[State#pc_server_state.name,hd(Pipe_list)]),
   case State#pc_server_state.generation of
       mutation->
-        %io:format("before !! send keep message"),
-        %io:format("meeeeeeeeeeeeeeeeeeeeeeeeeeeeeee toooooo ~p~n",[State#pc_server_state.name]),
         {Keep_PID_list,Kill_PID_List}=State#pc_server_state.keep_list,
         %io:format("send keep message"),
         send_keep(Keep_PID_list,Pipe_list),
