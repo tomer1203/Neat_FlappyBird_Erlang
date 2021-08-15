@@ -49,12 +49,10 @@ loop(State = #neuron_data{})->
       Weight = maps:get(From,In_Pids_Map),
       Acc = State#neuron_data.acc + Weight*Value,
       Reduced_in_pids = maps:remove(From,In_Pids_Map),
-      % if all inputs have been collected(map is empty)->
       case maps:size(Reduced_in_pids) of
          0->
           % activate the af function on the acc
           Result = activation_function(State#neuron_data.af, Acc+State#neuron_data.bias),
-           %io:format("--Iam= ~p, Result= ~p~n Weights= ~p~n",[State#neuron_data.id,Result,State#neuron_data.in_pids]),
           % send result to all output recipients
           [Out_Pid!{neuron_send, self(), Result}||Out_Pid <- State#neuron_data.out_pids],
           % restart the neuron to starting position

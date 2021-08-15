@@ -1,5 +1,5 @@
 %%%-------------------------------------------------------------------
-%%% @author Omri & Tomer
+%%% @author Omri, Tomer
 %%% @copyright (C) 2021, <COMPANY>
 %%% @doc
 %%%
@@ -7,7 +7,7 @@
 %%% Created : 21.7 2021 16:54
 %%%-------------------------------------------------------------------
 -module(neuralNetwork).
--author("Omri & Tomer").
+-author("Omri, Tomer").
 
 -behaviour(gen_statem).
 -include("Constants.hrl").
@@ -41,7 +41,6 @@ start(Name,PC_PID) ->
 %% gen_statem:start_link/[3,4], this function is called by the new
 %% process to initialize.
 init([PC_PID]) ->
-  io:format("NN UP~n"),
   {ok, idle, #nn_state{pcPID = PC_PID}}.
 
 %% @private
@@ -87,7 +86,7 @@ idle(info,{finished_constructing, ActuatorPid, SensorsPIDs},State) when Actuator
       {keep_state, NewState}
   end;
 
-idle(cast,{start_simulation, Pc_PID, Pipe_list},State)  ->
+idle(cast,{start_simulation, _Pc_PID, Pipe_list},State)  ->
   case State#nn_state.finish_and_start of
     finished_constructing ->
       SensorsPIDs=State#nn_state.sensorsPIDs,
@@ -107,23 +106,13 @@ simulation(info,{neuron_send, ActuatorPid, Value},State) when ActuatorPid =:= St
     Value>0.5 -> true;
     true      -> false
   end,
-  %io:format("Jump Value= ~p~n",[Value]),
   % simulate a frame
   {Collide,Bird_graphics,New_simulation_state} = simulation:simulate_a_frame(State#nn_state.simulation,Jump),
   NewState = State#nn_state{simulation = New_simulation_state},
 
-  % TODO: REMOVE THIS SECTION OF CODE(IT SIMULATES A CRASH AND WE SHOULD OBVIOUSLY NOT INCLUDE THIS)
-%%  Random_Number = rand:uniform(),
-%%  if
-%%    Random_Number<0.00001 -> io:format("Simulating a network failure~n"),exit("oh no random happend");
-%%    true ->ok
-%%  end,
-  %TODO: UP TO THIS POINT
-  %io:format("Sub 2 graphics ~p ~n",[State#nn_state.sub2graphics]),
   % send the current frame to graphics(only if you are subscribed to him)
   if
     State#nn_state.sub2graphics =:= true ->
-      %io:format("send ~p~n",[New_simulation_state#sim_state.,State#nn_state.]),
       rpc:call(?GRAPHICS_NODE,graphics,graphics_reduce_rpc,[{bird_update,self(),New_simulation_state#sim_state.total_time,{Collide,Bird_graphics}}]);
     true                                 -> ok
   end,
@@ -131,24 +120,22 @@ simulation(info,{neuron_send, ActuatorPid, Value},State) when ActuatorPid =:= St
   case Collide of
     false -> % if survived
       Features = simulation:feature_extraction(New_simulation_state),
-      %io:format("sensor inputs= ~p~n",[Features]),
       send_to_sensors(Features, State#nn_state.sensorsPIDs),
       {keep_state,NewState};
     true-> % if died
-      %io:format("died~n"),
       gen_server:cast(State#nn_state.pcPID,{finished_simulation,self(),fitness_function(New_simulation_state)}),
       {next_state,evaluation,NewState}
   end.
 
 fitness_function(Simulation = #sim_state{bird = Bird,visible_pipeList = Pipes})->
-  [Pipe|R] = Pipes,
+  [Pipe|_R] = Pipes,
   BestHeight = Pipe#pipe_rec.height+?PIPE_GAP/2,
   Second_Pipe_Height = (?BG_HEIGHT-?BASE_HEIGHT)-(Pipe#pipe_rec.height+?PIPE_GAP),
   Height = 15-15*abs(Bird#bird_rec.y-BestHeight)/max(Pipe#pipe_rec.height,Second_Pipe_Height),
   Fitness = Simulation#sim_state.total_time+Height,Fitness.
 
 evaluation(cast,{kill,PcPID},State) when PcPID =:= State#nn_state.pcPID ->
-  State#nn_state.actuatorPID ! {kill,self()}, %TODO - add to neuron kill message, if the actuator proses is dane is kill all ? (spawn_link) Tomer
+  State#nn_state.actuatorPID ! {kill,self()},
   New_state=State#nn_state{require_mutation =true},
   NextStateName = idle,
   {next_state, NextStateName, New_state};
@@ -175,7 +162,6 @@ handle_event(_EventType, _EventContent, _StateName, State = #nn_state{}) ->
 %% necessary cleaning up. When it returns, the gen_statem terminates with
 %% Reason. The return value is ignored.
 terminate(_Reason, _StateName, State = #nn_state{}) ->
-  io:format("closed_network~n"),
   State#nn_state.actuatorPID ! {kill,self()}.
 
 %% @private

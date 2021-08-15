@@ -1,5 +1,5 @@
 %%%-------------------------------------------------------------------
-%%% @author omrag
+%%% @author Omri, Tomer
 %%% @copyright (C) 2021, <COMPANY>
 %%% @doc
 %%%
@@ -7,8 +7,7 @@
 %%% Created : 21.7 2021 10:12
 %%%-------------------------------------------------------------------
 -module(genotype).
--author("omrag").
-
+-author("Omri, Tomer").
 -include("Constants.hrl").
 
 %% API
@@ -124,7 +123,6 @@ remove_node(G,N) ->
   [add_edge_rand_out(G,get_label(G,Nei))||Nei <- NeighboursIn],
   digraph:del_vertex(G,N#neuron.id),
   NodeInLayer =get_layer(G,Layer),
-  io:format("noods~p,remove!!~p",[NodeInLayer,N#neuron.id]),
   if
     NodeInLayer =:= [] -> io:format("update!~p",[NodeInLayer]),update_layer_remove(G,Layer+1);
     true -> ok
@@ -169,15 +167,6 @@ update_layer_add(G,L,N) ->
 %%%===================================================================
 %%%     genotype-mutator
 %%%===================================================================
-% add all the the in_neighbours of A as out_neighbours in graph G.
-%%connect_outport_inport(G,A,B) ->
-%%  ANeighbours = get_in_neighbours(G,A),
-%%  [add_edge(G,B,N)||N<-ANeighbours].
-%%
-%%% add all the the out_neighbours of A as in_neighbours in graph G.
-%%connect_inport_outport(G,A,B) ->
-%%  ANeighbours = get_out_neighbours(G,A),
-%%  [add_edge(G,N,B)||N<-ANeighbours].
 
 % the function return random neutron. node == record
 rand_neutron(G) ->
@@ -244,13 +233,6 @@ mutate_weights(G,[H|T]) ->
     true -> mutate_weights(G,T)
   end.
 
-
-%TODO- 3. reset_weights(G)
-%%Choose a random neuron A, and reset all its synaptic weights to random values
-%%ranging between -Pi/2 and Pi/2.
-%reset_weights(G) -> SelectedNeuron = rand_neutron(G),
-
-
 %%Choose a random neuron A, and change its activation function to a new random
 %%activation function chosen from the af_list in the constraint record belonging to
 %%the NN.
@@ -301,12 +283,8 @@ add_neuron(G) ->
     true ->
       set_node(G,Neuron),
       add_edge_rand_out(G,Neuron)
-%%      Nodes_from = get_layers_from(G,SelectedLayer),
-%%      Rand_node_output=rand_element(Nodes_from),
-%%      add_edge(G,Neuron,Rand_node_output)
   end,
   add_edge(G,Rand_node_input,Neuron).
-%TODO- need to select NodeA and NodeB and copy edge.
 
 %%remove_inlink:
 %%Choose a random neuron A, and disconnect it from a randomly chosen element
@@ -341,14 +319,11 @@ mutator(G,N) -> Index= rand:uniform(9),
     9 -> add_bias(G);
     2 -> remove_bias(G);
     3 -> mutate_weights(G);
-
     4 -> mutate_af(G);
     5 -> mutate_af(G);
-    %5 -> remove_neuron(G);
     6 -> add_link(G);
     7 -> remove_inlink(G);
     8 -> remove_outlink(G)
-    %9 -> add_neuron(G)
   end,
   mutator(G,N-1).
 

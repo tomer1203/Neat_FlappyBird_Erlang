@@ -23,16 +23,9 @@
 
 
 %%%-------------------------------------------------------------------
-%%all(Name)->
-%%    Pipes = simulation:generate_pipes(5),
-%%    start(pc1,1,1),
-%%    neuralNetwork:start(Name,self()),
-%%    %G_mutated = genotype:mutator(G,3),
-%%    G = genotype:test_Genotype(3,5),
-%%    gen_statem:cast(Name,{start_simulation,self(),G,Pipes,true}).
 start(N) ->
     Pipes = simulation:generate_pipes(?NUMBER_OF_PIPES),
-    Res = wx_object:start({local,?SERVER},?MODULE,[Pipes,[pc1,pc2,pc3,pc4],N],[]),io:format("graphics pid= ~p~n",[Res]).
+    wx_object:start({local,?SERVER},?MODULE,[Pipes,[pc1,pc2,pc3,pc4],N],[]).
 
 initialize_system(N,Pipes)->
     put(?PC1,?PC1),
@@ -41,36 +34,18 @@ initialize_system(N,Pipes)->
     put(?PC4,?PC4),
     PC_List = [pc1,pc2,pc3,pc4],
     ETS_Name_List = [pc1_ets,pc2_ets,pc3_ets,pc4_ets],
-    %PC_List2 = [{pc1,1},{pc2,2},{pc3,3},{pc4,4}],
-%%    Pc_to_EtsAtom = #{pc1=>pc1_ets,pc2=>pc2_ets,pc3=>pc3_ets,pc4=>pc4_ets},
-
-%%    Lfsm_to_EtsAtom = #{pc1=>sm_pc1_ets,pc2=>sm_pc2_ets,pc3=>sm_pc3_ets,pc4=>sm_pc4_ets},
     Graphics_reduce_pid = spawn_link(graphics,graphics_reduce,[round(N/4)]),
-    %TODO: might work with multiple nodes
     register(graphics_proxy,Graphics_reduce_pid),
-    io:format("initialize graphics pid= ~p~n",[self()]),
     {ok,Learning_pid} =  learningFSM:start_link(length(?PC_LIST),?PC_LIST,generate_map(lfsm_,PC_List,ETS_Name_List),N),
     DefGenList=[],
-    io:format("test 1~n"),
     rpc:call(get(?PC1),pc_server,start,[pc1,1,Learning_pid,round(N/length(PC_List)),2,2,PC_List,generate_map(pc1_,PC_List,ETS_Name_List),DefGenList]),
-    io:format("test 2~n"),
     rpc:call(get(?PC2),pc_server,start,[pc2,2,Learning_pid,round(N/length(?PC_LIST)),2,2,?PC_LIST,generate_map(pc2_,?PC_LIST,?ETS_NAME_LIST),DefGenList]),
-    io:format("test 3~n"),
     rpc:call(get(?PC3),pc_server,start,[pc3,3,Learning_pid,round(N/length(?PC_LIST)),2,2,?PC_LIST,generate_map(pc3_,?PC_LIST,?ETS_NAME_LIST),DefGenList]),
-    io:format("test 4~n"),
     rpc:call(get(?PC4),pc_server,start,[pc4,4,Learning_pid,round(N/length(?PC_LIST)),2,2,?PC_LIST,generate_map(pc4_,?PC_LIST,?ETS_NAME_LIST),DefGenList]),
-%%    pc_server:start(pc1,1,Learning_pid,round(N/length(PC_List)),2,5,PC_List,Pc_to_EtsAtom),
-%%    pc_server:start(pc2,2,Learning_pid,round(N/length(PC_List)),2,5,PC_List,Pc_to_EtsAtom),
-%%    pc_server:start(pc3,3,Learning_pid,round(N/length(PC_List)),2,5,PC_List,Pc_to_EtsAtom),
-%%    pc_server:start(pc4,4,Learning_pid,round(N/length(PC_List)),2,5,PC_List,Pc_to_EtsAtom),
-%%    [pc_server:start(Pc,Pc_num,Learning_pid,round(N/length(PC_List)),2,5,PC_List,Pc_to_EtsAtom)|| {Pc,Pc_num}<-PC_List2],
-    io:format("test 5~n"),
     rpc:call(get(?PC1), pc_server,pc_rpc,[pc1,{start_simulation,self(),Pipes}]),
-    io:format("test 6~n"),
     rpc:call(get(?PC2), pc_server,pc_rpc,[pc2,{start_simulation,self(),Pipes}]),
     rpc:call(get(?PC3), pc_server,pc_rpc,[pc3,{start_simulation,self(),Pipes}]),
-    rpc:call(get(?PC4), pc_server,pc_rpc,[pc4,{start_simulation,self(),Pipes}]),
-    io:format("test 7~n").
+    rpc:call(get(?PC4), pc_server,pc_rpc,[pc4,{start_simulation,self(),Pipes}]).
 
 
 
@@ -132,13 +107,7 @@ init([Pipes,PC_list,N]) ->
 
 %%%-------------------------------------------------------------------
 
-handle_click(#wx{obj = Button},State) ->
-    io:format("Start Button clicked~p~n",[State#graphics_state.pc_list]),
-    NewState = State#graphics_state{super_graphics = true},
-    {noreply, NewState}.
-handle_click2(#wx{obj = Button},_Event) ->
-    io:format("Stop Button clicked~n").
-handle_event(#wx{id =ID,obj = Button, event = #wxCommand{type = command_button_clicked}},State) ->
+handle_event(#wx{id =ID,obj = _Button, event = #wxCommand{type = command_button_clicked}},State) ->
     io:format("Button clicked~p~n",[ID]),
     NewState = case ID of
         10 -> % Start
@@ -161,7 +130,6 @@ handle_cast({bird_locations,Bird_List},State=#graphics_state{bird_queue = Bird_q
     {noreply, NewState};
 
 handle_cast({new_generation},State=#graphics_state{})->
-    io:format("graphics: starting new generation~n"),
     NewState = State#graphics_state{ simulation_finished = true},
     {noreply, NewState};
 
@@ -182,7 +150,6 @@ handle_info(timer, State=#graphics_state{frame = Frame,base_state = Base_locatio
         true ->
             if
                 State#graphics_state.simulation_finished =:= true ->
-%%                    PipeList = simulation:generate_pipes(?NUMBER_OF_PIPES),
                     PipeList = State#graphics_state.debug_const_pipe_list,
                     [H_pipe | T_pipes] =PipeList,
                     NewState = State#graphics_state{simulation_finished = false, pipes_state = #pipes_graphics_rec{visible_pipeList = [H_pipe], extra_pipeList = T_pipes, used_pipeList = []}},
@@ -195,13 +162,12 @@ handle_info(timer, State=#graphics_state{frame = Frame,base_state = Base_locatio
 
                 true -> NewState = State
             end,
-            NewBase  = Base_location_rec;
+            Base_location_rec;
         false ->
             {{value,Bird_list},NewBirdQueue} = queue:out(Bird_queue),
              NewPipes = simulation:simulate_pipes(Pipe_state),
              NewBase  = #base_state{x1 = move_base(Base_location_rec#base_state.x1) , x2 = move_base(Base_location_rec#base_state.x2)},
              NewState = State#graphics_state{current_bird_list =  Bird_list,pipes_state = NewPipes,time = Time+1,base_state = NewBase,bird_queue = NewBirdQueue}
-
     end,
     erlang:send_after(?Timer,self(),timer),
     {noreply, NewState}.
@@ -322,28 +288,25 @@ graphics_reduce(Bird_list,Frame_number,0,Next_N)->
     0 -> io:format("All birds Dead waiting for next generation~n"),
         rpc:call(?GRAPHICS_NODE,graphics,graphics_rpc,[{new_generation}]),
         receive
-            {new_generation,New_N}->io:format("restarting graphics~n"),graphics_reduce([],1,New_N,New_N)
+            {new_generation,New_N}->graphics_reduce([],1,New_N,New_N)
         end;
         N -> graphics_reduce([],Frame_number+1,N,N)
     end;
 graphics_reduce(Bird_List,Frame_number,N,Next_N)->
     receive
         {bird_update,_From,Frame_number,{Collide,Bird_graphics}}->
-            %io:format("received message from: ~p frame count: ~p left to receive:~p~n",[_From,Frame_number,N]),
             New_Birdlist = [{Collide,Bird_graphics}|Bird_List],
             case Collide of
                 true->  graphics_reduce(New_Birdlist,Frame_number,N-1,Next_N-1);
                 false-> graphics_reduce(New_Birdlist,Frame_number,N-1,Next_N)
             end;
-        {bird_update,_From,Number,{Collide,Bird_graphics}} when Number<Frame_number->
-            io:format("r"),
-%%            io:format("message slowing graphics down removed~n"),
+        {bird_update,_From,Number,{_Collide,_Bird_graphics}} when Number<Frame_number->
             graphics_reduce(Bird_List,Frame_number,N,Next_N);
-        {kill,_From}->io:format("graphics proxy closed~n"),ok
-    after 2000->
-        io:format("message was missing from graphics. removing one bird. Frame: ~p Remaining:~p~n",[Frame_number,N]),
-        %flush_messages(),
-        graphics_reduce(Bird_List,Frame_number,N-1,Next_N-1)
+        {kill,_From}->ok
+%%    after 2000->
+%%        io:format("message was missing from graphics. removing one bird. Frame: ~p Remaining:~p~n",[Frame_number,N]),
+%%        %flush_messages(),
+%%        graphics_reduce(Bird_List,Frame_number,N-1,Next_N-1)
 
     end.
 graphics_rpc(Pass2Graphics)->
@@ -356,7 +319,7 @@ append_atoms(Atom1,Atom2)->list_to_atom(lists:append(atom_to_list(Atom1),atom_to
 
 generate_map(Header,Keys,List_of_footers)->
     generate_map(Header,Keys,List_of_footers,#{}).
-generate_map(Header,[],[],Map_Acc)->Map_Acc;
+generate_map(_Header,[],[],Map_Acc)->Map_Acc;
 generate_map(Header,[Key|KeyT],[Footer|FooterT],Map_Acc)->
     Map_Acc2 = maps:put(Key,append_atoms(Header,Footer),Map_Acc),
     generate_map(Header,KeyT,FooterT,Map_Acc2).
