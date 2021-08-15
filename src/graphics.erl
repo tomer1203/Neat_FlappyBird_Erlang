@@ -58,13 +58,11 @@ init([Pipes,PC_list,N]) ->
 
 
     Button = wxButton:new(Frame, 10, [{label, "Start"}]),
-    Button2 = wxButton:new(Frame, 11, [{label, "finish"}]),
     MainSizer = wxBoxSizer:new(?wxHORIZONTAL),
 
     UiSizer = wxBoxSizer:new(?wxVERTICAL),
     wxSizer:add(MainSizer, Panel,[{flag,?wxEXPAND}]),
     wxSizer:add(UiSizer, Button,[{flag,?wxALL bor ?wxEXPAND},{border, 5}]),
-    wxSizer:add(UiSizer, Button2,[{flag,?wxEXPAND bor ?wxALL},{border,5}]),
     wxSizer:add(MainSizer, UiSizer),
 
     % create bitmap to all images
@@ -176,12 +174,13 @@ handle_sync_event(#wx{event=#wxPaint{}}, _,  State = #graphics_state{panel = Pan
     DC2=wxPaintDC:new(Panel),
     wxDC:clear(DC2),
     wxDC:drawBitmap(DC2,BmpRmap,{0,0}),
-    wxDC:drawBitmap(DC2,State#graphics_state.bmpLogoMap,{round((?BG_WIDTH/2) - 306/2),50+round(math:sin(Time/10)*10)}),
+
     case State#graphics_state.started of
         true ->[draw_bird(DC2,BmpB1Map,BmpB2Map,BmpB3Map,?BIRD_X_LOCATION,round(Y),Tilt,Time,State#graphics_state.super_graphics)||{_,#bird_graphics_rec{y=Y,angle = Tilt}}<- Bird_list],
             [draw_pipe(DC2,BmpPipeMap,Pipe#pipe_rec.x,Pipe#pipe_rec.height)||Pipe <- Pipes_state#pipes_graphics_rec.visible_pipeList];
         false -> ok
     end,
+    wxDC:drawBitmap(DC2,State#graphics_state.bmpLogoMap,{round((?BG_WIDTH/2) - 306/2),50+round(math:sin(Time/10)*10)}),
     draw_base(DC2, BmpBaseMap, Base_rec#base_state.x1, Base_rec#base_state.x2),
 % TODO: debug: shows a bird on the top right part of the screen every time that a collision happens
     if
@@ -227,7 +226,11 @@ draw_base(PaintPanel, BmpBaseMap, X1, X2)->
 terminate(_Reason, State = #graphics_state{}) ->
     io:format("killing graphics"),
     graphics_proxy!{kill,self()},
-    [gen_server:stop(PC)||PC<- State#graphics_state.pc_list],
+    rpc:cast(get(?PC1),pc_server,stop,[pc1]),
+    rpc:cast(get(?PC2),pc_server,stop,[pc2]),
+    rpc:cast(get(?PC3),pc_server,stop,[pc3]),
+    rpc:cast(get(?PC4),pc_server,stop,[pc4]),
+%%    [gen_server:stop(PC)||PC<- State#graphics_state.pc_list],
     gen_server:stop(learningFSM),
 %%    _State#graphics_state!{kill,self()},
     unregister(graphics_proxy),

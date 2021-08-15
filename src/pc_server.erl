@@ -16,6 +16,7 @@
 -export([start_link/9,start/9]).
 -export([pc_rpc/2, serialize/1, deserialize/1]).
 -export([nn_monitor/2]).
+-export([stop/1]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2,
@@ -319,3 +320,6 @@ make_gen_list(Number_of_networks,Num_Layers,Num_Neurons_Per_Layer,GenAcc) ->
 
 pc_rpc(Pc,Message)->
   gen_server:cast(Pc,Message).
+
+stop(Pc)->
+  gen_server:stop(Pc).
