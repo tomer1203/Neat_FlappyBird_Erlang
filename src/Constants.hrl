@@ -105,7 +105,7 @@
 -record(graphics_state, {
   frame, panel, dc, paint,
   pc_list, %TODO: maybe change this to a constant list or something
-  simulation_finished,super_graphics,
+  simulation_finished,super_graphics, started = false,
   number_of_nn,
   debug_const_pipe_list,
   time = 0, collide = false, base_state, bird_queue = queue:new(), pipes_state, current_bird_list = [],

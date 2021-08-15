@@ -85,13 +85,13 @@ get_layer(Node)->Node#neuron.layer.
 get_nodes(G)->
   VerL=digraph:vertices(G),
   [get_label(G,V) || V <- VerL].
-get_in_neighbours(G,N)->Neighbours=digraph:in_neighbours(G,N#neuron.id),[get_label(G,X)||X<-Neighbours].
-get_out_neighbours(G,N)->Neighbours=digraph:out_neighbours(G,N#neuron.id),[get_label(G,X)||X<-Neighbours].
+%%get_in_neighbours(G,N)->Neighbours=digraph:in_neighbours(G,N#neuron.id),[get_label(G,X)||X<-Neighbours].
+%%get_out_neighbours(G,N)->Neighbours=digraph:out_neighbours(G,N#neuron.id),[get_label(G,X)||X<-Neighbours].
 get_label(G,V)->{_,Node}=digraph:vertex(G,V),Node.
 %update the data in  a node from the graph.
 set_node(G,Node)->digraph:add_vertex(G,Node#neuron.id,Node).
 % set new weight for exist edge (['$e' | N])
-set_edge_weight(G,Edge,NewWeight) -> {E,Node1ID,Node2ID,_}= digraph:edge(G,Edge) ,digraph: add_edge(G,E,Node1ID,Node2ID,NewWeight).
+%set_edge_weight(G,Edge,NewWeight) -> {E,Node1ID,Node2ID,_}= digraph:edge(G,Edge) ,digraph: add_edge(G,E,Node1ID,Node2ID,NewWeight).
 % set add a  number to weight for exist edge (['$e' | N])
 mod_edge_weight(G,Edge,NewWeight ) -> {E,Node1ID,Node2ID,Weight}= digraph:edge(G,Edge) ,digraph: add_edge(G,E,Node1ID,Node2ID,NewWeight+Weight).
 %add edge form X to Y whit random weight.
