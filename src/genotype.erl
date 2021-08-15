@@ -23,7 +23,7 @@ mutate_af/1,
 remove_neuron/1,
 add_link/1,
 remove_inlink/1,
-remove_outlink/1]).
+remove_outlink/1,add_neuron/1]).
 %for test only
 test_Genotype(NumOfLayers,NumOfNeurons) ->
   ListOfSensors=[#neuron{type = sensor,layer = 0,id=sensor_1},#neuron{type = sensor,layer = 0,id=sensor_2},#neuron{type = sensor,layer = 0,id=sensor_3},#neuron{type = sensor,layer = 0,id=sensor_4}],

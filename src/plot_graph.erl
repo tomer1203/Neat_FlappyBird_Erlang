@@ -28,20 +28,10 @@ to_file(Graph, File, Format) ->
   X.
 plotEdge(Edge,IODevice)->
   {_,Node1ID,Node2ID,Weight}=Edge,
-  case is_integer(Node1ID) of
-    true -> Name1 = integer_to_list(Node1ID);
-    false -> Name1 = Node1ID
-  end,
-  case is_integer(Node2ID) of
-    true -> Name2 = integer_to_list(Node2ID);
-    false -> Name2 = Node2ID
-  end,
+
   io:format(IODevice, "  ~p ~s ~p [label=~p] ;~n",[Node1ID, "->", Node2ID,float_to_list(Weight,[{decimals,3}])]).
 plotNode(Node,IODevice)->
-  case is_integer(Node#neuron.id) of
-    true -> Name = integer_to_list(Node#neuron.id);
-    false -> Name = Node#neuron.id
-  end,
+
   ID=Node#neuron.id,
   Label = Node#neuron.type,
   Layer = Node#neuron.layer,
