@@ -10,28 +10,32 @@
 
 %% CONSTANTS %%
 % Node Communication Constants %
-%%-define(GRAPHICS_NODE, 'pc1@tomer-VirtualBox').
-%%-define(PC1, 'pc1@tomer-VirtualBox').
-%%-define(PC2, 'pc2@tomer-VirtualBox').
-%%-define(PC3, 'pc3@tomer-VirtualBox'). %132.72.104.
-%%-define(PC4, 'pc4@tomer-VirtualBox').
-%%-define(GRAPHICS_NODE, 'pc1@tomer-VirtualBox').
-%%-define(PC1, 'pc1@tomer-VirtualBox').
-%%-define(PC2, 'pc1@tomer-VirtualBox').
-%%-define(PC3, 'pc1@tomer-VirtualBox'). %132.72.104.
-%%-define(PC4, 'pc1@tomer-VirtualBox').
--define(GRAPHICS_NODE, 'pc1@132.72.104.171').
--define(PC1, 'pc1@132.72.104.171').
--define(PC2, 'pc2@132.72.104.213').
--define(PC3, 'pc3@132.72.104.203').
--define(PC4, 'pc4@132.72.104.214'). %132.72.104.
+-define(GRAPHICS_NODE, 'pc1@tomer-VirtualBox').
+-define(PC1, 'pc1@tomer-VirtualBox').
+-define(PC2, 'pc2@tomer-VirtualBox').
+-define(PC3, 'pc3@tomer-VirtualBox').
+-define(PC4, 'pc4@tomer-VirtualBox').
+%%-define(GRAPHICS_NODE, 'pc1@132.72.104.171').
+%%-define(PC1, 'pc1@132.72.104.171').
+%%-define(PC2, 'pc2@132.72.104.213').
+%%-define(PC3, 'pc3@132.72.104.203').
+%%-define(PC4, 'pc4@132.72.104.214').
+
+% Genotype Constants %
+% you are welcome to try and change the configuration and try to find a different solution
+%-define(ACTIVATION_FUNCTION_LIST,[gaussian, tanh, cos, sin, sign, bin, trinary, multiquadric, absolute, linear, quadratic, gaussian, sqrt, log, sigmoid]).
+-define(ACTIVATION_FUNCTION_LIST,[tanh]).
+-define(NUMBER_OF_MUTATION, 3).
+-define(NUMBER_OF_LAYERS, 2).
+-define(NUMBER_OF_NEURONS_PER_LAYER, 2).
+
 
 % World Constants %
 % these are not really used since the more accurate measurement is the actual graphics size
 -define(WIN_WIDTH,600).
 -define(WIN_HEIGHT,800).
 -define(FLOOR,730).
--define(Timer,40).% Graphics Update Timer, default: 67
+-define(Timer,40).% Graphics Update Timer, default: 60
 
 % Bird Constants %
 -define(BIRD_X_LOCATION,120).%230
@@ -48,7 +52,7 @@
 -define(PIPE_MIN_DISTANCE_FROM_EDGES,50).
 -define(PIPE_MAX_HEIGHT,?BG_HEIGHT-?BASE_HEIGHT-?PIPE_GAP-?PIPE_MIN_DISTANCE_FROM_EDGES).
 -define(NUMBER_OF_PIPES,20).
--define(END_OF_THE_WORLD,10000).
+-define(END_OF_THE_WORLD,5000).
 
 % Graphics Constants %
 -define(BG_WIDTH,564).%288
@@ -61,10 +65,7 @@
 -define(BIRD_HEIGHT,48).%24
 -define(BIRD_RADIUS,26).% averaged width and height to 26
 
-% Genotype Constants %
-%-define(ACTIVATION_FUNCTION_LIST,[gaussian, tanh, cos, sin, sign, bin, trinary, multiquadric, absolute, linear, quadratic, gaussian, sqrt, log, sigmoid]).
--define(ACTIVATION_FUNCTION_LIST,[tanh]).
--define(NUMBER_OF_MUTATION, 3).
+
 
 -define(NUMBER_OF_SUBSCRIBED_BIRDS,100).
 -define(DIVIDE_BY,4). % controls how many survive for example for divide by 4 and 100 nn you get 25 survive and 75 dead
@@ -104,9 +105,9 @@
 %% GRAPHICS RECORDS %%
 -record(graphics_state, {
   frame, panel, dc, paint,
-  pc_list, %TODO: maybe change this to a constant list or something
-  simulation_finished,super_graphics, started = false,
-  number_of_nn,
+  pc_list,
+  simulation_finished,super_graphics, started = false,active_graphics = true,text,text1,num_of_generations =0,
+  number_of_nn,frame_count,
   debug_const_pipe_list,
   time = 0, collide = false, base_state, bird_queue = queue:new(), pipes_state, current_bird_list = [],
   bmpRMap,bmpB1Map,bmpB2Map,bmpB3Map,bmpB4Map,bmpPipeMap,bmpBaseMap,bmpLogoMap}).

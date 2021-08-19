@@ -38,10 +38,10 @@ initialize_system(N,Pipes)->
     register(graphics_proxy,Graphics_reduce_pid),
     {ok,Learning_pid} =  learningFSM:start_link(length(?PC_LIST),?PC_LIST,generate_map(lfsm_,PC_List,ETS_Name_List),N),
     DefGenList=[],
-    rpc:call(get(?PC1),pc_server,start,[pc1,1,Learning_pid,round(N/length(PC_List)),2,2,PC_List,generate_map(pc1_,PC_List,ETS_Name_List),DefGenList]),
-    rpc:call(get(?PC2),pc_server,start,[pc2,2,Learning_pid,round(N/length(?PC_LIST)),2,2,?PC_LIST,generate_map(pc2_,?PC_LIST,?ETS_NAME_LIST),DefGenList]),
-    rpc:call(get(?PC3),pc_server,start,[pc3,3,Learning_pid,round(N/length(?PC_LIST)),2,2,?PC_LIST,generate_map(pc3_,?PC_LIST,?ETS_NAME_LIST),DefGenList]),
-    rpc:call(get(?PC4),pc_server,start,[pc4,4,Learning_pid,round(N/length(?PC_LIST)),2,2,?PC_LIST,generate_map(pc4_,?PC_LIST,?ETS_NAME_LIST),DefGenList]),
+    rpc:call(get(?PC1),pc_server,start,[pc1,1,Learning_pid,round(N/length(PC_List)) ,?NUMBER_OF_LAYERS,?NUMBER_OF_NEURONS_PER_LAYER,PC_List,generate_map(pc1_,PC_List,ETS_Name_List),DefGenList]),
+    rpc:call(get(?PC2),pc_server,start,[pc2,2,Learning_pid,round(N/length(?PC_LIST)),?NUMBER_OF_LAYERS,?NUMBER_OF_NEURONS_PER_LAYER,?PC_LIST,generate_map(pc2_,?PC_LIST,?ETS_NAME_LIST),DefGenList]),
+    rpc:call(get(?PC3),pc_server,start,[pc3,3,Learning_pid,round(N/length(?PC_LIST)),?NUMBER_OF_LAYERS,?NUMBER_OF_NEURONS_PER_LAYER,?PC_LIST,generate_map(pc3_,?PC_LIST,?ETS_NAME_LIST),DefGenList]),
+    rpc:call(get(?PC4),pc_server,start,[pc4,4,Learning_pid,round(N/length(?PC_LIST)),?NUMBER_OF_LAYERS,?NUMBER_OF_NEURONS_PER_LAYER,?PC_LIST,generate_map(pc4_,?PC_LIST,?ETS_NAME_LIST),DefGenList]),
     rpc:call(get(?PC1), pc_server,pc_rpc,[pc1,{start_simulation,self(),Pipes}]),
     rpc:call(get(?PC2), pc_server,pc_rpc,[pc2,{start_simulation,self(),Pipes}]),
     rpc:call(get(?PC3), pc_server,pc_rpc,[pc3,{start_simulation,self(),Pipes}]),
@@ -58,11 +58,24 @@ init([Pipes,PC_list,N]) ->
 
 
     Button = wxButton:new(Frame, 10, [{label, "Start"}]),
+    Button1 = wxButton:new(Frame, 11, [{label, "Toggle graphics"}]),
+    Button2 = wxButton:new(Frame, 12, [{label, "Enchance graphics"}]),
+    Font = wxFont:new(42, ?wxFONTFAMILY_DEFAULT, ?wxFONTSTYLE_NORMAL, ?wxFONTWEIGHT_BOLD),
+    Font1 = wxFont:new(16, ?wxFONTFAMILY_DEFAULT, ?wxFONTSTYLE_NORMAL, ?wxFONTWEIGHT_BOLD),
+    Text = wxStaticText:new(Frame, 13,"Gen: 0",[{size,{250,70}}]),
+    Text1 = wxStaticText:new(Frame, 13,"Frame Count= 0",[{size,{250,70}}]),
+    wxStaticText:setFont(Text,Font),
+    wxStaticText:setFont(Text1,Font1),
+%%    wxStaticText:setLabel(Text,""),
     MainSizer = wxBoxSizer:new(?wxHORIZONTAL),
 
     UiSizer = wxBoxSizer:new(?wxVERTICAL),
     wxSizer:add(MainSizer, Panel,[{flag,?wxEXPAND}]),
+    wxSizer:add(UiSizer, Text,[{flag,?wxALL bor ?wxEXPAND},{border, 5}]),
+    wxSizer:add(UiSizer, Text1,[{flag,?wxALL bor ?wxEXPAND},{border, 5}]),
     wxSizer:add(UiSizer, Button,[{flag,?wxALL bor ?wxEXPAND},{border, 5}]),
+    wxSizer:add(UiSizer, Button1,[{flag,?wxALL bor ?wxEXPAND},{border, 5}]),
+    wxSizer:add(UiSizer, Button2,[{flag,?wxALL bor ?wxEXPAND},{border, 5}]),
     wxSizer:add(MainSizer, UiSizer),
 
     % create bitmap to all images
@@ -78,6 +91,8 @@ init([Pipes,PC_list,N]) ->
     wxPanel:connect(Panel, paint, [callback]),
     wxFrame:connect(Frame, close_window),
     wxButton:connect(Button, command_button_clicked),
+    wxButton:connect(Button1, command_button_clicked),
+    wxButton:connect(Button2, command_button_clicked),
 %%    wxWindow:connect(Panel, command_button_clicked),
 
     %wxButton:connect(Button2, command_button_clicked, [{callback, fun handle_click2/2}]),
@@ -99,7 +114,7 @@ init([Pipes,PC_list,N]) ->
         debug_const_pipe_list = Pipes,
         number_of_nn = N,
         pipes_state = #pipes_graphics_rec{visible_pipeList = [Pipe],extra_pipeList = Extras,used_pipeList = []},
-        base_state = NewBase,
+        base_state = NewBase,text = Text,text1 = Text1,num_of_generations = 0, frame_count = 0,
         bmpRMap = BmpRmap,bmpB1Map = BmpB1Map,bmpB2Map = BmpB2Map,bmpB3Map = BmpB3Map,bmpPipeMap = BmpPipeMap,bmpBaseMap = BmpBaseMap,bmpLogoMap = BmpLogoMap,
         current_bird_list = []}}.
 
@@ -109,8 +124,13 @@ handle_event(#wx{id =ID,obj = _Button, event = #wxCommand{type = command_button_
     io:format("Button clicked~p~n",[ID]),
     NewState = case ID of
         10 -> % Start
-            initialize_system(State#graphics_state.number_of_nn,State#graphics_state.debug_const_pipe_list),State#graphics_state{started = true};
-        11 -> State#graphics_state{super_graphics = not State#graphics_state.super_graphics}
+            case State#graphics_state.started of
+                false -> initialize_system(State#graphics_state.number_of_nn,State#graphics_state.debug_const_pipe_list),
+                         State#graphics_state{started = true,num_of_generations = 1};
+                true  -> State
+            end;
+        11 -> State#graphics_state{active_graphics = not State#graphics_state.active_graphics};
+        12 -> State#graphics_state{super_graphics = not State#graphics_state.super_graphics}
 
     end,
     {noreply, NewState};
@@ -128,7 +148,7 @@ handle_cast({bird_locations,Bird_List},State=#graphics_state{bird_queue = Bird_q
     {noreply, NewState};
 
 handle_cast({new_generation},State=#graphics_state{})->
-    NewState = State#graphics_state{ simulation_finished = true},
+    NewState = State#graphics_state{ simulation_finished = true,num_of_generations = State#graphics_state.num_of_generations+1},
     {noreply, NewState};
 
 handle_cast(Input,State)->
@@ -150,7 +170,7 @@ handle_info(timer, State=#graphics_state{frame = Frame,base_state = Base_locatio
                 State#graphics_state.simulation_finished =:= true ->
                     PipeList = State#graphics_state.debug_const_pipe_list,
                     [H_pipe | T_pipes] =PipeList,
-                    NewState = State#graphics_state{simulation_finished = false, pipes_state = #pipes_graphics_rec{visible_pipeList = [H_pipe], extra_pipeList = T_pipes, used_pipeList = []}},
+                    NewState = State#graphics_state{simulation_finished = false, pipes_state = #pipes_graphics_rec{visible_pipeList = [H_pipe], extra_pipeList = T_pipes, used_pipeList = []},frame_count = 0},
                     graphics_proxy ! {new_generation, round(State#graphics_state.number_of_nn / 4)},
                     rpc:cast(get(?PC1),pc_server,pc_rpc,[pc1,{run_generation, self(), PipeList}]),
                     rpc:cast(get(?PC2),pc_server,pc_rpc,[pc2,{run_generation, self(), PipeList}]),
@@ -164,28 +184,34 @@ handle_info(timer, State=#graphics_state{frame = Frame,base_state = Base_locatio
         false ->
             {{value,Bird_list},NewBirdQueue} = queue:out(Bird_queue),
              NewPipes = simulation:simulate_pipes(Pipe_state),
-             NewBase  = #base_state{x1 = move_base(Base_location_rec#base_state.x1) , x2 = move_base(Base_location_rec#base_state.x2)},
-             NewState = State#graphics_state{current_bird_list =  Bird_list,pipes_state = NewPipes,time = Time+1,base_state = NewBase,bird_queue = NewBirdQueue}
+            case State#graphics_state.active_graphics of
+                true -> NewBase  = #base_state{x1 = move_base(Base_location_rec#base_state.x1) , x2 = move_base(Base_location_rec#base_state.x2)};
+                false -> NewBase = Base_location_rec
+            end,
+
+             NewState = State#graphics_state{current_bird_list =  Bird_list,pipes_state = NewPipes,time = Time+1,base_state = NewBase,bird_queue = NewBirdQueue,frame_count = State#graphics_state.frame_count+1}
     end,
-    erlang:send_after(?Timer,self(),timer),
+    case State#graphics_state.active_graphics of
+        true -> erlang:send_after(?Timer,self(),timer);
+        false-> erlang:send_after(1,self(),timer) % when graphics is disabled you can run the update loop way faster
+    end,
     {noreply, NewState}.
 
-handle_sync_event(#wx{event=#wxPaint{}}, _,  State = #graphics_state{panel = Panel,current_bird_list = Bird_list,pipes_state = Pipes_state,base_state = Base_rec,collide = Collide,time = Time, bmpRMap = BmpRmap,bmpB1Map = BmpB1Map,bmpB2Map = BmpB2Map,bmpB3Map = BmpB3Map,bmpPipeMap = BmpPipeMap,bmpBaseMap = BmpBaseMap}) ->
+handle_sync_event(#wx{event=#wxPaint{}}, _,  State = #graphics_state{panel = Panel,current_bird_list = Bird_list,pipes_state = Pipes_state,base_state = Base_rec,collide = _Collide,time = Time, bmpRMap = BmpRmap,bmpB1Map = BmpB1Map,bmpB2Map = BmpB2Map,bmpB3Map = BmpB3Map,bmpPipeMap = BmpPipeMap,bmpBaseMap = BmpBaseMap}) ->
     DC2=wxPaintDC:new(Panel),
     wxDC:clear(DC2),
     wxDC:drawBitmap(DC2,BmpRmap,{0,0}),
-
-    case State#graphics_state.started of
-        true ->[draw_bird(DC2,BmpB1Map,BmpB2Map,BmpB3Map,?BIRD_X_LOCATION,round(Y),Tilt,Time,State#graphics_state.super_graphics)||{_,#bird_graphics_rec{y=Y,angle = Tilt}}<- Bird_list],
-            [draw_pipe(DC2,BmpPipeMap,Pipe#pipe_rec.x,Pipe#pipe_rec.height)||Pipe <- Pipes_state#pipes_graphics_rec.visible_pipeList];
-        false -> ok
-    end,
-    wxDC:drawBitmap(DC2,State#graphics_state.bmpLogoMap,{round((?BG_WIDTH/2) - 306/2),50+round(math:sin(Time/10)*10)}),
-    draw_base(DC2, BmpBaseMap, Base_rec#base_state.x1, Base_rec#base_state.x2),
-% TODO: debug: shows a bird on the top right part of the screen every time that a collision happens
-    if
-        Collide =:= true ->wxDC:drawBitmap(DC2,BmpB1Map,{0,20});
-        true-> ok
+    wxStaticText:setLabel(State#graphics_state.text,lists:append("Gen: ",lists:flatten(io_lib:format("~p", [State#graphics_state.num_of_generations])))),
+    wxStaticText:setLabel(State#graphics_state.text1,lists:append("Frame Count= ",lists:flatten(io_lib:format("~p", [State#graphics_state.frame_count])))),
+    case State#graphics_state.active_graphics of
+        true->case State#graphics_state.started of
+                  true ->[draw_bird(DC2,BmpB1Map,BmpB2Map,BmpB3Map,?BIRD_X_LOCATION,round(Y),Tilt,Time,State#graphics_state.super_graphics)||{_,#bird_graphics_rec{y=Y,angle = Tilt}}<- Bird_list],
+                      [draw_pipe(DC2,BmpPipeMap,Pipe#pipe_rec.x,Pipe#pipe_rec.height)||Pipe <- Pipes_state#pipes_graphics_rec.visible_pipeList];
+                  false -> ok
+              end,
+            wxDC:drawBitmap(DC2,State#graphics_state.bmpLogoMap,{round((?BG_WIDTH/2) - 306/2),50+round(math:sin(Time/10)*10)}),
+            draw_base(DC2, BmpBaseMap, Base_rec#base_state.x1, Base_rec#base_state.x2);
+        false->ok
     end,
     wxPaintDC:destroy(DC2);
 
@@ -230,13 +256,12 @@ terminate(_Reason, State = #graphics_state{}) ->
     rpc:cast(get(?PC2),pc_server,stop,[pc2]),
     rpc:cast(get(?PC3),pc_server,stop,[pc3]),
     rpc:cast(get(?PC4),pc_server,stop,[pc4]),
-%%    [gen_server:stop(PC)||PC<- State#graphics_state.pc_list],
     gen_server:stop(learningFSM),
-%%    _State#graphics_state!{kill,self()},
     unregister(graphics_proxy),
     wxFrame:destroy(State#graphics_state.frame).
 
-createBitMaps() ->         % create bitmap to all images
+% create bitmap to all images
+createBitMaps() ->
     Rmap = wxImage:new("../Images/bg.png"),
     Rmapc = wxImage:scale(Rmap,?BG_WIDTH,?BG_HEIGHT),
     BmpRMap = wxBitmap:new(Rmapc),

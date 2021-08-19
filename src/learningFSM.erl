@@ -260,6 +260,6 @@ keep_and_start([Pc|T],PipeList,Number_of_nn,[])->
 
 keep_and_start(Pcs,PipeList,Number_of_nn,[H|T])->
   {PC_down,Name,Number,GenList}=H,
-  rpc:call(get(PC_down),pc_server,start,[Name,Number,self(),round(Number_of_nn/4),2,2,?PC_LIST,graphics:generate_map(pc1_,?PC_LIST,?ETS_NAME_LIST),GenList]),
+  rpc:call(get(PC_down),pc_server,start,[Name,Number,self(),round(Number_of_nn/4),?NUMBER_OF_LAYERS,?NUMBER_OF_NEURONS_PER_LAYER,?PC_LIST,graphics:generate_map(pc1_,?PC_LIST,?ETS_NAME_LIST),GenList]),
   rpc:call(get(PC_down), pc_server,pc_rpc,[Name,{start_simulation,self(),PipeList}]),
   keep_and_start([Pc||Pc<-Pcs, Pc =/= H],PipeList,Number_of_nn,T).
