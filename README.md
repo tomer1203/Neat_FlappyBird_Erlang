@@ -42,7 +42,7 @@ to run the code on four consoles change the configuration in src/Constants.hrl t
 -define(PC3, 'pc3@<enter pc1 hostname>').
 -define(PC4, 'pc4@<enter pc1 hostname>').
 ```
-then in each bash terminal run the following command:
+then in each bash terminal go to the src directory and run the following command:
 ```bash
 erl -sname 'pc<x>' -setcookie yummy
 ```
