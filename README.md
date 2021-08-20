@@ -8,7 +8,7 @@ the network learns through a genetic process. In each iteration we spawn up to a
 the whole system is fault tolerant. if a neural network falls mid run it would get restarted without any notice in the system. if a whole computer/node gets disconnected all the responsibilities of that computer will be passed to a different live node without stopping the learning process or the graphics.
 
 ## Installation
-
+we are using erlang version 22 on ubuntu. this will probably also work on windows but it was not tested.
 Use the package manager to install erlang:
 ```bash
 sodu apt-get install erlang
