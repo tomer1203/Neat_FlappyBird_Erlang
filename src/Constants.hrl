@@ -25,7 +25,7 @@
 % you are welcome to try and change the configuration and try to find a different solution
 %-define(ACTIVATION_FUNCTION_LIST,[gaussian, tanh, cos, sin, sign, bin, trinary, multiquadric, absolute, linear, quadratic, gaussian, sqrt, log, sigmoid]).
 -define(ACTIVATION_FUNCTION_LIST,[tanh]).
--define(NUMBER_OF_MUTATION, 3).
+-define(NUMBER_OF_MUTATION, 15). % number of mutation is actually a random normal function. this increases the likelyhood of a large mutation
 -define(NUMBER_OF_LAYERS, 2).
 -define(NUMBER_OF_NEURONS_PER_LAYER, 2).
 

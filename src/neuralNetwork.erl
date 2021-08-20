@@ -191,7 +191,6 @@ construct_network(G,NnPID)->
   NnPID ! {finished_constructing,SelfPID,SensorsPIDs},
   neuron:loop(NeuronActuator).
 
-%TODO: number of layer is int ? or not?
 % construct all the layer frm the actuator until the sensor return map of ID -> PID.
 construct_all_layers(_,-1,IdToPIDs)->IdToPIDs;
 construct_all_layers(G,NumOfLayer,IdToPIDs)->

@@ -60,7 +60,7 @@ loop(State = #neuron_data{})->
         _ ->
           loop(State#neuron_data{acc = Acc,remaining_in_pids = Reduced_in_pids})
       end;
-    {kill,_From}->exit("closing neuron");%TODO: check if this one works(this might not close all the other process since the reason is normal
+    {kill,_From}->exit("closing neuron");
     M ->
       erlang:error(lists:flatten(io_lib:format("Invalid Message: ~p", [M])))
   end.

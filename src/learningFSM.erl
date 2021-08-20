@@ -45,7 +45,6 @@ start(Number_of_Pcs,Pc_Names, Name_to_atom,Number_of_networks) ->
   {ok, State :: #learningFSM_state{}} | {ok, State :: #learningFSM_state{}, timeout() | hibernate} |
   {stop, Reason :: term()} | ignore).
 
-%%TODO - get a map from Pids to atom <1.32.2> -> pc1
 %% get list of pids!
 init([Number_of_Pcs, Pc_Names, Name_to_atom,Number_of_networks]) ->
   put(?PC1,?PC1),
@@ -86,6 +85,8 @@ handle_call(_Request, _From, State = #learningFSM_state{}) ->
   {noreply, NewState :: #learningFSM_state{}, timeout() | hibernate} |
   {stop, Reason :: term(), NewState :: #learningFSM_state{}}).
 
+% each pc sends one network evaluation message which is the accumulated messages from all the networks of that pc.
+% when the learning fsm gets all of it's messages it sends back the feedback to the networks
 handle_cast({network_evaluation,PC_PID,Fitness_list},
     State = #learningFSM_state{fitness_list = Acc_Fitness_list,reboot = Reboot,number_of_nn = Number_of_nn,
       checkpoint = Map,run_time_state =Run_time_state, number_of_pc = Number_of_pc }) ->
@@ -116,7 +117,7 @@ handle_cast({network_evaluation,PC_PID,Fitness_list},
       _->   {noreply, State#learningFSM_state{fitness_list = All_Fitness_lists, checkpoint = NewMap}}
   end;
 
-
+% update the learning fsm ets tables
 handle_cast({update_generation,From,List_of_gen},State) ->
   Map_ets=State#learningFSM_state.ets_maps,
   Gen_ets = maps:get(From,Map_ets),
@@ -126,6 +127,10 @@ handle_cast({update_generation,From,List_of_gen},State) ->
   % send list of gens ti the neighbours.
   {noreply, State};
 
+% when there is a node down we reach this function eventually which is responsible
+% to restarting only one pc process(meaning that it might get called multiple times).
+% it also doen't restart the pc immediatly but rather sets up the restart to happen when
+% all other simulations are finished
 handle_cast({restart_pc,PC_down}, State = #learningFSM_state{checkpoint = Map}) ->
   Gen_map = State#learningFSM_state.ets_maps,
   {Name,Number} = case PC_down of
@@ -146,7 +151,8 @@ handle_cast({restart_pc,PC_down}, State = #learningFSM_state{checkpoint = Map}) 
   end;
 
 
-% recover got 3 messages -> start simulation in the new Pcs
+% a message from the graphics that tells that the graphics finished the current generations display.
+% this opens up the possibilty to restart if also the learning fsm is ready
 handle_cast({run_generation,_From,PipeList}, State = #learningFSM_state{reboot = Reboot,number_of_nn = Number_of_nn, run_time_state =Run_time_state}) ->
   Pcs =[?PC1,?PC2,?PC3,?PC4],
   case Reboot of
@@ -171,9 +177,13 @@ handle_cast(_Request, State = #learningFSM_state{}) ->
   {noreply, NewState :: #learningFSM_state{}, timeout() | hibernate} |
   {stop, Reason :: term(), NewState :: #learningFSM_state{}}).
 
+% all good
 handle_info({nodeup,_PC},State)->
   {noreply, State};
 
+% all bad..
+% this is the first function in a long series called when a pc is down
+% it finds which pc is going to take the responsibilty of the fallen pc and then gives responsibilty to the next functions
 handle_info({nodedown,PC},State)-> % if a node is down, check which PC, move responsibilities to different PC and update monitors
   Connection_Map = #{?PC2=>?PC3,?PC3=>?PC4,?PC4=>?PC1},
   io:format("node down ~p --> ~p ---> ~p ~n",[PC, maps:get(PC,Connection_Map),get(maps:get(PC,Connection_Map))]),
@@ -208,6 +218,8 @@ code_change(_OldVsn, State = #learningFSM_state{}, _Extra) ->
 top_genotypes(FitList,Number_of_networks,Map_ets)->
   SortedFitList=lists:sort(fun({KeyA,ValA}, {KeyB,ValB}) -> {ValA,KeyA} >= {ValB,KeyB} end, FitList),
   make_keep_List(SortedFitList,length(SortedFitList),[],Number_of_networks,Map_ets).
+
+% create a list of only the genes to save
 make_keep_List(_ ,0 ,List,_Number_of_networks,_Map_ets) -> List;
 make_keep_List([{_PID,_}|T], N ,List,Number_of_networks,Map_ets) when N =< round((?DIVIDE_BY-1)*Number_of_networks/?DIVIDE_BY) -> make_keep_List(T, N-1 ,List,Number_of_networks,Map_ets);
 make_keep_List([{PID,_}|T], N ,List,Number_of_networks,Map_ets) when N > round((?DIVIDE_BY-1)*Number_of_networks/?DIVIDE_BY) -> make_keep_List(T, N-1 ,List ++[{PID,true,ets_lookup(PID,Map_ets)}],Number_of_networks,Map_ets).
@@ -221,9 +233,11 @@ create_ets_map([],_,Map)->Map;
 create_ets_map([H|T],Name_to_atom,Map)->Pc_ets = ets:new(maps:get(H,Name_to_atom),[set,public]),
   New_map=maps:put(H,Pc_ets,Map), create_ets_map(T,Name_to_atom,New_map).
 
+% RPC
 lfsm_rpc(Message)->
   gen_server:cast(learningFSM,Message).
 
+% smart ets lookup which also searches in the neighbors ets
 ets_lookup(Network_PID,Neighbours_map_ets) ->
   Ets_list = maps:to_list(Neighbours_map_ets),
   {Key,ETS}=hd(Ets_list),
@@ -233,6 +247,7 @@ ets_lookup(Network_PID,Neighbours_map_ets) ->
     G -> exit(lists:flatten(io_lib:format("The gen is not in neighbours ets ! ~p~n",[G])))
   end .
 
+% find the next open pc to take the load of the fallen pc
 find_and_replace_pc_name([],_Closed_Pc,_New_Pc)->ok;
 find_and_replace_pc_name([{PcKey,PcNode}|T],Closed_Pc,NewPc)->
   case PcNode of
@@ -245,6 +260,7 @@ find_and_replace_pc_name([{PcKey,PcNode}|T],Closed_Pc,NewPc)->
       find_and_replace_pc_name(T,Closed_Pc,NewPc)
   end.
 
+% yep. pretty self explanatory
 name_to_sname(Pc) ->
   case Pc of
     ?PC1 -> pc1;
@@ -253,6 +269,8 @@ name_to_sname(Pc) ->
     ?PC4 -> pc4
   end.
 
+% send a keep(start next simulation without killing anyone) to all existing pc and a start message to new pc
+% used to safely transition between two generations in the event of a pc nodedown
 keep_and_start([],_PipeList,_Number_of_nn,[]) -> ok;
 keep_and_start([Pc|T],PipeList,Number_of_nn,[])->
   rpc:cast(Pc,pc_server,pc_rpc,[name_to_sname(Pc),{network_keep,self()}]),

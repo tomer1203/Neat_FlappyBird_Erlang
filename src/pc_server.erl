@@ -48,6 +48,7 @@ start(Name,Pc_num,Learning_pid,Number_of_networks,Num_Layers,Num_Neurons_Per_Lay
   {ok, State :: #pc_server_state{}} | {ok, State :: #pc_server_state{}, timeout() | hibernate} |
   {stop, Reason :: term()} | ignore).
 
+% initialize the pc server
 init([Name,Pc_num,Learning_pid,Number_of_networks,Num_Layers,Num_Neurons_Per_Layer,Pc_Names, Name_to_atom,DefGenList]) ->
   process_flag(trap_exit, false),
   GenList=case DefGenList of
@@ -65,6 +66,7 @@ init([Name,Pc_num,Learning_pid,Number_of_networks,Num_Layers,Num_Neurons_Per_Lay
   {ok, #pc_server_state{name = Name,pc_num = Pc_num, learning_pid = Learning_pid,
     number_of_networks = Number_of_networks,gen_ets = Gen_ets,
     fitness_ets = Fitness_ets, remaining_networks = Number_of_networks,neighbours_map_ets = Neighbors_map_ets}}.
+
 %% Neighbors_Ets_Map
 %% Pids -> empty ets
 %%
@@ -88,6 +90,9 @@ handle_call(_Request, _From, State = #pc_server_state{}) ->
   {noreply, NewState :: #pc_server_state{}, timeout() | hibernate} |
   {stop, Reason :: term(), NewState :: #pc_server_state{}}).
 
+% start simulation is a message received once in the start of a pc which tells the pc it can give a go to all networks
+% under him. for the next generations only two messages one coming from the graphics and one coming from the learning fsm
+% can make the pc restart the networks
 handle_cast({start_simulation,_From,Pipe_list}, State = #pc_server_state{gen_ets = Gen_ets})->
   First_key = ets:first(Gen_ets),
   start_networks(First_key,Pipe_list,Gen_ets,State#pc_server_state.name),
@@ -104,12 +109,14 @@ handle_cast({finished_simulation,From,Time}, State = #pc_server_state{remaining_
   ets:insert(Fitness_ets,{From,Time}),
   {noreply, State#pc_server_state{remaining_networks = Remaining_networks-1}};
 
+% update your personal ets
 handle_cast({neighbor_ets_update,_From,Neighbor,List_of_gen}, State = #pc_server_state{})->
   spawn(fun()->update_ets(List_of_gen,Neighbor,State#pc_server_state.neighbours_map_ets)end),
   {noreply,State};
 
 
-% from learning fsm
+% from learning fsm- keep all networks
+% used only in a nodedown recovery
 handle_cast({network_keep,_From}, State = #pc_server_state{gen_ets = Gen_ets, pipe_list=Pips,learning_pid = Learning_FSM_Pid,name = Pc_Name})->
   Keep_PID_list = [Pid||{Pid,_G} <- ets:tab2list(Gen_ets)],
   send_keep(Keep_PID_list,Pips),
@@ -117,6 +124,8 @@ handle_cast({network_keep,_From}, State = #pc_server_state{gen_ets = Gen_ets, pi
   % send message finish
   {noreply, State#pc_server_state{generation=wait,remaining_networks = State#pc_server_state.number_of_networks}};
 
+% feedback received from the learning fsm(which networks did well).
+% this is one of two messages that need to arrive in order to start a new generation.
 handle_cast({network_feedback,From,TopGens}, State = #pc_server_state{name = Pc_Name,gen_ets = Gen_ets,learning_pid = Learning_FSM_Pid})when From =:= State#pc_server_state.learning_pid->
   % get list of all available networks(the ones that were killed), a list of the networks to keep and a list of the genotypes to mutate
   {Keep_map,Mutate_list} = parseKeepList(Gen_ets,State#pc_server_state.neighbours_map_ets,TopGens),
@@ -130,7 +139,7 @@ handle_cast({network_feedback,From,TopGens}, State = #pc_server_state{name = Pc_
       _ -> NewState=State#pc_server_state{generation=mutation, keep_list = {Keep_PID_list,Kill_PID_List}}
   end,{noreply, NewState};
 
-% from graphics
+% graphics finished displaying the graphics and is ready for a new generation
 handle_cast({run_generation,_From, Pipe_list}, State)->
   case State#pc_server_state.generation of
       mutation->
@@ -141,6 +150,7 @@ handle_cast({run_generation,_From, Pipe_list}, State)->
       _ -> NewState=State#pc_server_state{generation=graphics, pipe_list = Pipe_list,remaining_networks = State#pc_server_state.number_of_networks}
   end,{noreply, NewState};
 
+% one of the neural networks crashed and needs to be restarted.
 handle_cast({network_down,_,Nn_Pid},State = #pc_server_state{gen_ets = Gen_ets,fitness_ets = Fitness_ETS,pipe_list = Pipes,name = Name})->
   io:format("network_down recognized restarting network~n"),
   [{_Key,Gen}] = ets:lookup(Gen_ets,Nn_Pid),
@@ -155,7 +165,7 @@ handle_cast({network_down,_,Nn_Pid},State = #pc_server_state{gen_ets = Gen_ets,f
   io:format("network restarted~n"),
   {noreply, State};
 
-
+% error test
 handle_cast(_Request, State = #pc_server_state{}) ->io:format("oh no pc message does not fit ~p ~n",[_Request]),
   {noreply, State}.
 
@@ -193,6 +203,7 @@ code_change(_OldVsn, State = #pc_server_state{}, _Extra) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
+% constructs networks
 construct_networks(PC_Pid,Pc_num,N,_GenList)->
   construct_networks(PC_Pid,Pc_num,N,self(),_GenList,[]).
 
@@ -227,6 +238,7 @@ start_networks(Key,Pipes,Gen_ets,PC_pid)->
   Next_key = ets:next(Gen_ets,Key),
   start_networks(Next_key,Pipes,Gen_ets,PC_pid).
 
+% build the neural network name(atom)
 get_nn_name(PC_Name,N)->list_to_atom(lists:append("nn_",lists:append(atom_to_list(PC_Name), integer_to_list(N)))).
 
 % turn the keep list into a list of the networks to kill the networks to keep and which genotypes
@@ -241,7 +253,7 @@ parseKeepList(Gen_ets,Ets_map_neighbours,[{NetworkPid,_Subscribe,{_To,G}}|KeepLi
     T -> exit(lists:flatten(io_lib:format("No mach! ! ~p~n",[T])))
     end.
 
-
+% takes a list of good networks and a list of genotypes to mutate and sends each of them the respective message it is waiting for(either keep or kill)
 mutate_and_restart_networks(PC_pid,KeepMap,MutateList,Gen_ets,_PipeList) -> mutate_and_restart_networks(PC_pid,KeepMap,MutateList,Gen_ets,ets:tab2list(Gen_ets),_PipeList,[],[]).
 mutate_and_restart_networks(_PC_pid,_KeepMap,MutateList,_Gen_ets,[],_PipeList,Kill_PID_List,Keep_PID_list) -> case MutateList of
                                                                           [] -> {Kill_PID_List,Keep_PID_list};
@@ -258,11 +270,11 @@ mutate_and_restart_networks(PC_pid,KeepMap,MutateList,Gen_ets, [{Key,_Genotype}|
       mutate_and_restart_networks(PC_pid,maps:remove(Key,KeepMap),MutateList,Gen_ets,T_ets,_PipeList,Kill_List,[Key|Keep_list])
   end.
 
-
+% give a network a genotype mutate it in the process
 assignGenToNetwork(NetworkPid,Gen,Gen_ets,PC_pid)->
   % Copy gen
   Copy_genotype = digraph_utils:subgraph(Gen,digraph:vertices(Gen)),
-  genotype:mutator(Copy_genotype,round(abs(rand:normal())*15)),
+  genotype:mutator(Copy_genotype,round(abs(rand:normal())*?NUMBER_OF_MUTATION)),
   % the genotype is inserted as is and when it is mutated in the network it will automatically change since this is an ets.
   ets:insert(Gen_ets,{NetworkPid, Copy_genotype}),
   gen_statem:cast(NetworkPid,{kill,self()}),
@@ -275,27 +287,32 @@ assignGenToNetwork(NetworkPid,Gen,Gen_ets,PC_pid)->
 % send a keep message to all the keep networks
 send_keep(KeepList,PipeList) -> [gen_statem:cast(NetworkPid,{keep,self(),PipeList,true})||NetworkPid<-KeepList].
 
+% send a start simulation to all networks
 start_simulation_kill([],_)->ok;
 start_simulation_kill([H|T],Pips)->
   gen_statem:cast(H,{start_simulation,self(),Pips}),
   start_simulation_kill(T,Pips).
 
+% sync the learning fsm of the ets that you have
 sync_ets(Gen_ets,_Learning_FSM_Pid,Pc_pid) ->
   Pid_Gen_List = ets:tab2list(Gen_ets),
   Fully_Serialized_ETS = [{Network_Pid,serialize(G)}||{Network_Pid,G}<-Pid_Gen_List],
   rpc:call(?GRAPHICS_NODE,learningFSM,lfsm_rpc,[{update_generation,Pc_pid,Fully_Serialized_ETS}]).
 
+% get synched from the learning fsm with new ets maps
 update_ets(List_of_gen,Neighbor,Neighbors_Ets_map)->
   Gen_ets= maps:get(Neighbor,Neighbors_Ets_map),
   ets:delete_all_objects(Gen_ets),
   [ets:insert(Gen_ets,{NetPid,deserialize(Flat_Gen)}) || {NetPid,Flat_Gen} <- List_of_gen].
 
+% turn a digraph to a list
 serialize({digraph, V, E, N, B}) ->
   {ets:tab2list(V),
     ets:tab2list(E),
     ets:tab2list(N),
     B}.
 
+% turns a serialized digraph list back into a digraph
 deserialize({VL, EL, NL, B}) ->
   DG = {digraph, V, E, N, B} = case B of
                                  true -> digraph:new();
@@ -309,6 +326,7 @@ deserialize({VL, EL, NL, B}) ->
   ets:insert(N, NL),
   DG.
 
+% makes new gens
 make_gen_list(Number_of_networks,Num_Layers,Num_Neurons_Per_Layer) ->
   make_gen_list(Number_of_networks,Num_Layers,Num_Neurons_Per_Layer,[]).
 make_gen_list(0,_Num_Layers,_Num_Neurons_Per_Layer,GenAcc) -> GenAcc;
@@ -316,6 +334,7 @@ make_gen_list(Number_of_networks,Num_Layers,Num_Neurons_Per_Layer,GenAcc) ->
   G = genotype:test_Genotype(Num_Layers,Num_Neurons_Per_Layer),
   make_gen_list(Number_of_networks-1,Num_Layers,Num_Neurons_Per_Layer,[G|GenAcc]).
 
+% RPC!
 pc_rpc(Pc,Message)->
   gen_server:cast(Pc,Message).
 

@@ -23,10 +23,13 @@
 
 
 %%%-------------------------------------------------------------------
+% call this function to run the program
+% N is the number of networks
 start(N) ->
     Pipes = simulation:generate_pipes(?NUMBER_OF_PIPES),
     wx_object:start({local,?SERVER},?MODULE,[Pipes,[pc1,pc2,pc3,pc4],N],[]).
 
+% opens up the whole system pc and learning fsm
 initialize_system(N,Pipes)->
     put(?PC1,?PC1),
     put(?PC2,?PC2),
@@ -48,15 +51,14 @@ initialize_system(N,Pipes)->
     rpc:call(get(?PC4), pc_server,pc_rpc,[pc4,{start_simulation,self(),Pipes}]).
 
 
-
+% initialize the wx object
 init([Pipes,PC_list,N]) ->
-%%    initialize_system(N,Pipes),
     % graphics
     WxServer = wx:new(),
     Frame = wxFrame:new(WxServer, ?wxID_ANY, "FLappy Bird", [{size,{?BG_WIDTH, ?BG_HEIGHT}}]),
     Panel  = wxPanel:new(Frame,[{size, {?BG_WIDTH, ?BG_HEIGHT}}]),
 
-
+    % graphics structs
     Button = wxButton:new(Frame, 10, [{label, "Start"}]),
     Button1 = wxButton:new(Frame, 11, [{label, "Toggle graphics"}]),
     Button2 = wxButton:new(Frame, 12, [{label, "Enchance graphics"}]),
@@ -93,17 +95,11 @@ init([Pipes,PC_list,N]) ->
     wxButton:connect(Button, command_button_clicked),
     wxButton:connect(Button1, command_button_clicked),
     wxButton:connect(Button2, command_button_clicked),
-%%    wxWindow:connect(Panel, command_button_clicked),
-
-    %wxButton:connect(Button2, command_button_clicked, [{callback, fun handle_click2/2}]),
 
     % Generate random pipes
     [Pipe|Extras] = Pipes,
 
-    %Pipe = generate_pipes(1),
-    %Extras = generate_pipes(20),
     NewBase = #base_state{x1 = 0,x2 = ?BASE_WIDTH},
-    %dc=DC, paint = Paint
     {Frame,#graphics_state{
         frame = Frame,
         panel = Panel,
@@ -119,7 +115,7 @@ init([Pipes,PC_list,N]) ->
         current_bird_list = []}}.
 
 %%%-------------------------------------------------------------------
-
+% all button events reach here. we diffrentiate between them using their id
 handle_event(#wx{id =ID,obj = _Button, event = #wxCommand{type = command_button_clicked}},State) ->
     io:format("Button clicked~p~n",[ID]),
     NewState = case ID of
@@ -134,6 +130,8 @@ handle_event(#wx{id =ID,obj = _Button, event = #wxCommand{type = command_button_
 
     end,
     {noreply, NewState};
+
+% closing window event
 handle_event(#wx{event = #wxClose{}},State = #graphics_state {frame = Frame}) -> % close window event
     io:format("Exiting\n"),
     wxWindow:destroy(Frame),
@@ -147,15 +145,17 @@ handle_cast({bird_locations,Bird_List},State=#graphics_state{bird_queue = Bird_q
     NewState = State#graphics_state{bird_queue = New_bird_queue},
     {noreply, NewState};
 
+% graphics proxy generates this message when an iteration is dead
 handle_cast({new_generation},State=#graphics_state{})->
     NewState = State#graphics_state{ simulation_finished = true,num_of_generations = State#graphics_state.num_of_generations+1},
     {noreply, NewState};
 
+% error check
 handle_cast(Input,State)->
     io:format("no fitting cast function Input= ~p ~n State= ~p~n",[Input,State]),{noreply, State}.
 
 
-
+% when we lost a pc we get this message from the learning fsm to tell us to fix the dictionary
 handle_info({nodedown,OldPc,NewPc},State)-> % if a node is down, check which PC, move responsibilities to different PC and update monitors
     io:format("graphics, nodedown ~p~n",[NewPc]),
     put(OldPc,NewPc),
@@ -167,7 +167,7 @@ handle_info(timer, State=#graphics_state{frame = Frame,base_state = Base_locatio
     case queue:is_empty(Bird_queue) of
         true ->
             if
-                State#graphics_state.simulation_finished =:= true ->
+                State#graphics_state.simulation_finished =:= true -> % starting new generation!
                     PipeList = State#graphics_state.debug_const_pipe_list,
                     [H_pipe | T_pipes] =PipeList,
                     NewState = State#graphics_state{simulation_finished = false, pipes_state = #pipes_graphics_rec{visible_pipeList = [H_pipe], extra_pipeList = T_pipes, used_pipeList = []},frame_count = 0},
@@ -181,7 +181,7 @@ handle_info(timer, State=#graphics_state{frame = Frame,base_state = Base_locatio
                 true -> NewState = State
             end,
             Base_location_rec;
-        false ->
+        false -> % next frame
             {{value,Bird_list},NewBirdQueue} = queue:out(Bird_queue),
              NewPipes = simulation:simulate_pipes(Pipe_state),
             case State#graphics_state.active_graphics of
@@ -191,12 +191,16 @@ handle_info(timer, State=#graphics_state{frame = Frame,base_state = Base_locatio
 
              NewState = State#graphics_state{current_bird_list =  Bird_list,pipes_state = NewPipes,time = Time+1,base_state = NewBase,bird_queue = NewBirdQueue,frame_count = State#graphics_state.frame_count+1}
     end,
+
+    % this delay is the main reason the system is slow and it is only to make the graphics smooth and readable
+    % when disabling graphics we barely wan't to wait and can just loop over as fast as possible
     case State#graphics_state.active_graphics of
         true -> erlang:send_after(?Timer,self(),timer);
         false-> erlang:send_after(1,self(),timer) % when graphics is disabled you can run the update loop way faster
     end,
     {noreply, NewState}.
 
+% sync event happens once for every timer event and it prints everything to screen
 handle_sync_event(#wx{event=#wxPaint{}}, _,  State = #graphics_state{panel = Panel,current_bird_list = Bird_list,pipes_state = Pipes_state,base_state = Base_rec,collide = _Collide,time = Time, bmpRMap = BmpRmap,bmpB1Map = BmpB1Map,bmpB2Map = BmpB2Map,bmpB3Map = BmpB3Map,bmpPipeMap = BmpPipeMap,bmpBaseMap = BmpBaseMap}) ->
     DC2=wxPaintDC:new(Panel),
     wxDC:clear(DC2),
@@ -214,9 +218,10 @@ handle_sync_event(#wx{event=#wxPaint{}}, _,  State = #graphics_state{panel = Pan
         false->ok
     end,
     wxPaintDC:destroy(DC2);
-
 handle_sync_event(_Event,_,State) ->
     {noreply, State}.
+
+% draw bird with angle and animations
 draw_bird(PaintPanel,BmpBird1Map,BmpBird2Map,BmpBird3Map,X,Y,Tilt,Time,Super_graphics)->
     BirdBmp = case round(Time/?ANIMATION_TIME) rem 3 of
                   0->BmpBird1Map;
@@ -236,6 +241,8 @@ draw_bird(PaintPanel,BmpBird1Map,BmpBird2Map,BmpBird3Map,X,Y,Tilt,Time,Super_gra
         false ->
             wxDC:drawBitmap(PaintPanel, BirdBmp, {X,Y})
     end.
+
+% draw pipe basically.. draws the pipes.
 draw_pipe(PaintPanel,BmpPipeMap,X, Height)->
     PipeIm = wxBitmap:convertToImage(BmpPipeMap),
     RotPipeIm = wxImage:rotate(PipeIm,angle2radians(180), {0,0}),% if direction is not left, rotate the image
@@ -245,10 +252,13 @@ draw_pipe(PaintPanel,BmpPipeMap,X, Height)->
     wxDC:drawBitmap(PaintPanel, RotBmpPipeMap, {X, Height-?PIPE_HEIGHT}),
     wxBitmap:destroy(RotBmpPipeMap),
     wxDC:drawBitmap(PaintPanel, BmpPipeMap, {X, Height+?PIPE_GAP}).
+
+% read the functions name
 draw_base(PaintPanel, BmpBaseMap, X1, X2)->
     wxDC:drawBitmap(PaintPanel,BmpBaseMap,{X1,?BG_HEIGHT - ?BASE_HEIGHT}),
     wxDC:drawBitmap(PaintPanel,BmpBaseMap,{X2,?BG_HEIGHT - ?BASE_HEIGHT}).
 
+% this function is responsible for cleanly closing the system in the case of an error or a normal closure.
 terminate(_Reason, State = #graphics_state{}) ->
     io:format("killing graphics"),
     graphics_proxy!{kill,self()},
@@ -300,16 +310,18 @@ createBitMaps() ->
     wxImage:destroy(LogomapSc),
     {BmpRMap,BmpB1Map,BmpB2Map,BmpB3Map,BmpPipeMap,BmpBaseMap,BmpLogoMap}.
 
+% takes angle in degrees and turns it into radians
 angle2radians(Angle)->Angle*math:pi()*2/360.
 
+% move the base graphics
 move_base(X) when X + ?BASE_WIDTH - ?X_VELOCITY < 0 ->?BASE_WIDTH-8;
 move_base(X)->X - ?X_VELOCITY.
 
 
 % this is a sort of a proxy for the communication with all the neural networks
 % it accumulates the inputs from the networks and only when it has all birds from all the network
+% then it sends a message to the graphics updating it with the animation
 graphics_reduce(N)->graphics_reduce([],1,N,N).
-
 graphics_reduce(Bird_list,Frame_number,0,Next_N)->
     rpc:call(?GRAPHICS_NODE,graphics,graphics_rpc,[{bird_locations,Bird_list}]),
     case Next_N of
@@ -337,14 +349,19 @@ graphics_reduce(Bird_List,Frame_number,N,Next_N)->
 %%        graphics_reduce(Bird_List,Frame_number,N-1,Next_N-1)
 
     end.
+
+% RPC functions:
 graphics_rpc(Pass2Graphics)->
     wx_object:cast(graphics,Pass2Graphics).
 
 graphics_reduce_rpc(Pass2GraphicsReduce)->
     graphics_proxy!Pass2GraphicsReduce.
 
+% two atoms become one
 append_atoms(Atom1,Atom2)->list_to_atom(lists:append(atom_to_list(Atom1),atom_to_list(Atom2))).
 
+% generate ETS names for the system
+% for example creates the names pc_1_ets from pc_1 and _ets
 generate_map(Header,Keys,List_of_footers)->
     generate_map(Header,Keys,List_of_footers,#{}).
 generate_map(_Header,[],[],Map_Acc)->Map_Acc;
